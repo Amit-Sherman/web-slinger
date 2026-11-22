@@ -18,7 +18,41 @@ import { launchVelocity } from './ballistics';
 const ROPE_POINTS = 25;
 const STRAND_POINTS = 24;
 const MAX_STREAM_PARTICLES = 160;
+// Every strip is allocated once at this many points and updated in place. three.js locks an
+// instanced geometry's drawable count the first time it renders, so growing a line by calling
+// setPositions() with a longer array silently truncates it (this hid the web stream).
+const STRIP_CAPACITY = MAX_STREAM_PARTICLES + 8;
 const BLEND_TIME = 0.15;
+const FLASH_TIME = 0.14;
+const SPLAT_TIME = 0.5;
+const PULSE_SPEED = 45; // m/s the dash pattern flows outward along a stream
+
+/** Soft round glow texture shared by the tip, muzzle flash and splat sprites. */
+function glowTexture(): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.25, 'rgba(200,255,255,0.95)');
+  grad.addColorStop(0.55, 'rgba(95,244,255,0.45)');
+  grad.addColorStop(1, 'rgba(95,244,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function glowSprite(tex: THREE.Texture, screenSpace: boolean): THREE.Sprite {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    sizeAttenuation: !screenSpace,
+  }));
+  s.visible = false;
+  s.frustumCulled = false;
+  return s;
+}
 
 interface Particle { p: THREE.Vector3; v: THREE.Vector3 }
 
@@ -29,6 +63,12 @@ interface Strip {
 
 interface HandVisual {
   strip: Strip;
+  tip: THREE.Sprite; // bright glob leading the stream (constant screen size)
+  flash: THREE.Sprite; // muzzle flash at the nozzle when firing starts
+  splat: THREE.Sprite; // burst where the stream catches
+  flashT: number;
+  splatT: number;
+  pulse: number;
   particles: Particle[]; // oldest first
   points: THREE.Vector3[]; // what was drawn last frame (for release / blend)
   vels: THREE.Vector3[]; // matching velocities (for release)
@@ -42,7 +82,8 @@ interface HandVisual {
 interface Strand {
   strip: Strip;
   pos: THREE.Vector3[];
-  prev: THREE.Vector3[];
+  vel: THREE.Vector3[];
+  old: THREE.Vector3[];
   rest: number[];
   pinned: boolean;
   age: number;
@@ -50,7 +91,8 @@ interface Strand {
 
 function makeStrip(scene: THREE.Scene): Strip {
   const geo = new LineGeometry();
-  geo.setPositions([0, 0, 0, 0, 0, 0]);
+  geo.setPositions(new Float32Array(STRIP_CAPACITY * 3));
+  geo.instanceCount = 0;
   const core = new Line2(geo, new LineMaterial({ color: 0xe8ffff, linewidth: 2.2, worldUnits: false, transparent: true }));
   const glow = new Line2(geo, new LineMaterial({
     color: LINE_CYAN, linewidth: 7, worldUnits: false, transparent: true, opacity: 0.45,
@@ -64,13 +106,36 @@ function makeStrip(scene: THREE.Scene): Strip {
   return { core, glow };
 }
 
-function setStrip(strip: Strip, pts: THREE.Vector3[], opacity: number, width: number): void {
-  const flat = new Float32Array(pts.length * 3);
-  pts.forEach((p, i) => flat.set([p.x, p.y, p.z], i * 3));
-  strip.core.geometry.setPositions(flat);
+function setDashed(strip: Strip, dashed: boolean): void {
+  const m = strip.core.material;
+  if (m.dashed === dashed) return;
+  m.dashed = dashed;
+  m.dashSize = 3;
+  m.gapSize = 1.2;
+  m.needsUpdate = true;
+}
+
+/** Write a polyline into the strip's fixed-capacity segment buffer (start/end pairs). */
+function writePoints(geo: LineGeometry, pts: THREE.Vector3[]): void {
+  const n = Math.min(pts.length, STRIP_CAPACITY);
+  const start = geo.attributes.instanceStart as THREE.InterleavedBufferAttribute;
+  const buf = start.data;
+  const a = buf.array as Float32Array;
+  for (let i = 0; i < n - 1; i++) {
+    const p = pts[i], q = pts[i + 1];
+    const o = i * 6;
+    a[o] = p.x; a[o + 1] = p.y; a[o + 2] = p.z;
+    a[o + 3] = q.x; a[o + 4] = q.y; a[o + 5] = q.z;
+  }
+  buf.needsUpdate = true;
+  geo.instanceCount = Math.max(0, n - 1);
+}
+
+function setStrip(strip: Strip, pts: THREE.Vector3[], opacity: number, width: number, glow = 0.45): void {
+  writePoints(strip.core.geometry, pts);
   strip.core.visible = strip.glow.visible = true;
   strip.core.material.opacity = opacity;
-  strip.glow.material.opacity = 0.45 * opacity;
+  strip.glow.material.opacity = glow * opacity;
   strip.core.material.linewidth = 2.2 * width;
   strip.glow.material.linewidth = 7 * width;
 }
@@ -108,10 +173,18 @@ export class LineVisuals {
   private tmp = new THREE.Vector3();
 
   constructor(private scene: THREE.Scene) {
-    const mk = (): HandVisual => ({
-      strip: makeStrip(scene), particles: [], points: [], vels: [], blendFrom: null, blendT: 0,
-      lastKind: 'idle', vibration: 0, lastTension: 0,
-    });
+    const tex = glowTexture();
+    const mk = (): HandVisual => {
+      const tip = glowSprite(tex, true);
+      const flash = glowSprite(tex, true);
+      const splat = glowSprite(tex, false);
+      scene.add(tip, flash, splat);
+      return {
+        strip: makeStrip(scene), tip, flash, splat, flashT: 0, splatT: 0, pulse: 0,
+        particles: [], points: [], vels: [], blendFrom: null, blendT: 0,
+        lastKind: 'idle', vibration: 0, lastTension: 0,
+      };
+    };
     this.hands = [mk(), mk()];
   }
 
@@ -141,7 +214,17 @@ export class LineVisuals {
 
     // State transitions
     if (l.kind !== h.lastKind) {
-      if (l.kind === 'firing') h.particles.length = 0;
+      if (l.kind === 'firing') {
+        h.particles.length = 0;
+        h.flashT = FLASH_TIME;
+        setDashed(h.strip, true);
+      } else {
+        setDashed(h.strip, false);
+      }
+      if (l.kind === 'attached') {
+        h.splatT = SPLAT_TIME;
+        h.splat.position.copy(l.target);
+      }
       if (l.kind === 'attached' && h.points.length > 1) {
         h.blendFrom = resample(h.points, null, ROPE_POINTS).p;
         h.blendT = BLEND_TIME;
@@ -150,6 +233,14 @@ export class LineVisuals {
       if (l.kind === 'idle' && h.points.length > 1) this.spawnStrand(h, h.lastKind === 'attached');
       if (l.kind === 'idle') h.particles.length = 0;
       h.lastKind = l.kind;
+    }
+
+    this.updateSprites(h, nozzle, dt);
+    h.tip.visible = l.kind === 'firing';
+    if (l.kind === 'firing') {
+      h.tip.position.copy(l.target);
+      const flicker = 1 + Math.sin(this.t * 90 + hand * 2) * 0.12;
+      h.tip.scale.setScalar(0.034 * flicker);
     }
 
     if (l.kind === 'idle') {
@@ -181,7 +272,11 @@ export class LineVisuals {
       vels.push(l.tipVel.clone());
       h.points = pts;
       h.vels = vels;
-      setStrip(h.strip, pts, 1, 1);
+      // Streams are brighter and thicker than attached lines, with pulses flowing outward
+      setStrip(h.strip, pts, 1, 1.35, 0.75);
+      h.strip.core.computeLineDistances();
+      h.pulse -= PULSE_SPEED * dt;
+      h.strip.core.material.dashOffset = h.pulse;
       return;
     }
 
@@ -223,6 +318,27 @@ export class LineVisuals {
     setStrip(h.strip, pts, 1, thin);
   }
 
+  /** Muzzle flash at the nozzle and catch splat at the anchor, both short fades. */
+  private updateSprites(h: HandVisual, nozzle: THREE.Vector3, dt: number): void {
+    h.flashT = Math.max(0, h.flashT - dt);
+    h.flash.visible = h.flashT > 0;
+    if (h.flash.visible) {
+      const k = h.flashT / FLASH_TIME;
+      h.flash.position.copy(nozzle);
+      h.flash.scale.setScalar(0.05 + 0.06 * (1 - k));
+      h.flash.material.opacity = k;
+    }
+    h.splatT = Math.max(0, h.splatT - dt);
+    h.splat.visible = h.splatT > 0;
+    if (h.splat.visible) {
+      const k = h.splatT / SPLAT_TIME;
+      // World-space burst that grows and fades; never smaller than ~1.5% of the distance so far catches read
+      const d = h.splat.position.distanceTo(nozzle);
+      h.splat.scale.setScalar(Math.max(0.8, d * 0.03) * (1.6 - k * 0.8));
+      h.splat.material.opacity = k * k;
+    }
+  }
+
   /** Detach the current strand: it lingers, falls under gravity and fades out. */
   private spawnStrand(h: HandVisual, wasAttached: boolean): void {
     const { p, v } = resample(h.points, h.vels.length === h.points.length ? h.vels : null, STRAND_POINTS);
@@ -230,13 +346,13 @@ export class LineVisuals {
     const strip = this.spare.pop() ?? makeStrip(this.scene);
     strip.core.material.resolution.copy(this.resolution);
     strip.glow.material.resolution.copy(this.resolution);
-    const dt0 = 1 / 60;
     const rest: number[] = [];
     for (let i = 1; i < p.length; i++) rest.push(p[i].distanceTo(p[i - 1]));
     this.strands.push({
       strip,
       pos: p,
-      prev: p.map((pp, i) => pp.clone().addScaledVector(v[i], -dt0)),
+      vel: v,
+      old: p.map((pp) => pp.clone()),
       rest,
       pinned: wasAttached, // a released attached line still hangs from its anchor (last point)
       age: 0,
@@ -248,36 +364,38 @@ export class LineVisuals {
     this.spare.push(s.strip);
   }
 
+  /** Position-based strand sim with explicit velocities (correct for any frame time). */
   private updateStrands(dt: number): void {
-    const step = Math.min(dt, 1 / 30);
-    const g = LINES.webGravity * step * step;
-    const damp = 1 - 0.8 * step;
     const tmp = this.tmp;
     for (const s of this.strands) {
       s.age += dt;
       const last = s.pos.length - 1;
-      for (let i = 0; i <= last; i++) {
-        if (s.pinned && i === last) continue;
-        const p = s.pos[i];
-        tmp.subVectors(p, s.prev[i]).multiplyScalar(damp);
-        s.prev[i].copy(p);
-        p.add(tmp);
-        p.y -= g;
-        if (p.y < 0.25) p.y = 0.25; // rest on the street rather than vanishing into it
-      }
-      for (let it = 0; it < 4; it++) {
-        for (let i = 0; i < last; i++) {
-          const a = s.pos[i], b = s.pos[i + 1];
-          tmp.subVectors(b, a);
-          const d = tmp.length() || 1e-6;
-          const diff = (d - s.rest[i]) / d;
-          if (s.pinned && i + 1 === last) {
-            a.addScaledVector(tmp, diff);
-          } else {
-            a.addScaledVector(tmp, diff * 0.5);
-            b.addScaledVector(tmp, -diff * 0.5);
+      if (dt > 1e-5) {
+        const damp = Math.max(0, 1 - 0.8 * dt);
+        for (let i = 0; i <= last; i++) {
+          s.old[i].copy(s.pos[i]);
+          if (s.pinned && i === last) continue;
+          const v = s.vel[i];
+          v.y -= LINES.webGravity * dt;
+          v.multiplyScalar(damp);
+          s.pos[i].addScaledVector(v, dt);
+          if (s.pos[i].y < 0.25) s.pos[i].y = 0.25; // rest on the street rather than vanishing into it
+        }
+        for (let it = 0; it < 4; it++) {
+          for (let i = 0; i < last; i++) {
+            const a = s.pos[i], b = s.pos[i + 1];
+            tmp.subVectors(b, a);
+            const d = tmp.length() || 1e-6;
+            const diff = (d - s.rest[i]) / d;
+            if (s.pinned && i + 1 === last) {
+              a.addScaledVector(tmp, diff);
+            } else {
+              a.addScaledVector(tmp, diff * 0.5);
+              b.addScaledVector(tmp, -diff * 0.5);
+            }
           }
         }
+        for (let i = 0; i <= last; i++) s.vel[i].subVectors(s.pos[i], s.old[i]).divideScalar(dt);
       }
       const fadeStart = LINES.strandLifetime - LINES.strandFade;
       const opacity = s.age < fadeStart ? 0.85 : 0.85 * Math.max(0, 1 - (s.age - fadeStart) / LINES.strandFade);

@@ -33,11 +33,11 @@ export const LINES = {
   minLength: 2,
   maxLength: 5000, // effectively unlimited (city diagonal is ~2.8 km); webs have no range limit
   attachLengthFactor: 1.0, // rope length at attach = current distance to the anchor
-  // Elastic lines: pull (m/s²) per unit of strain. 450 → ~3.5% stretch hanging still,
-  // ~10% at the bottom of a fast swing.
-  elasticity: 450,
-  dampingRatio: 0.35, // 0 = bouncy forever, 1 = no bounce
-  maxStretch: 0.35, // hard stop at +35% of rest length
+  // Elastic lines: pull (m/s²) per unit of strain. 300 → ~5% stretch hanging still,
+  // ~8% mid-swing, ~17% when catching a fall.
+  elasticity: 300,
+  dampingRatio: 0.3, // 0 = bouncy forever, 1 = no bounce
+  maxStretch: 0.5, // hard stop at +50% of rest length
   driftCorrection: 0.25, // fraction of over-limit stretch corrected per tick
   maxCorrectionSpeed: 6, // cap on hard-stop correction (m/s), avoids velocity spikes
   releaseBoost: 1.5, // m/s added along velocity when the last line is released

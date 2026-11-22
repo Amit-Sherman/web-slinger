@@ -118,11 +118,12 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   spring-damper** acting on velocity. It pulls only when stretched past its rest length and
   never pushes:
   - pull (m/s²) = `elasticity × strain + 2·ζ·√k × radialSpeed`, where `strain = (d − L)/L`,
-    `k = elasticity / L`, `elasticity = 450`, `ζ (dampingRatio) = 0.35`. Pull is never negative.
+    `k = elasticity / L`, `elasticity = 300`, `ζ (dampingRatio) = 0.3`. Pull is never negative.
+    (Softened from 450 / 0.35 after playtest: "a bit more elastic".)
   - Because stiffness scales with 1/L, a given load gives the same *percentage* stretch on
-    long and short lines: about 3.5% hanging still, about 5% mid-swing, and up to about 12%
+    long and short lines: about 5% hanging still, about 8% mid-swing, and up to about 16%
     when a line catches a fall (then a soft bounce settles).
-  - Hard stop at +35% stretch (velocity-level, correction capped at 6 m/s).
+  - Hard stop at +50% stretch (velocity-level, correction capped at 6 m/s).
   - Reel in / let out change the rest length L. The spring makes reeling feel slightly
     elastic and lagging. Forces are central, so angular momentum is conserved and reeling a
     loaded line still speeds you up.
@@ -143,8 +144,8 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   - Air control (WASD while airborne): 9 m/s² · walk 7 m/s · sprint 13 m/s · jump 9 m/s (sprint jump 11)
   - Player capsule: radius 0.4 m, total height ~1.9 m; eyes 0.7 m above centre
 - **Headless check (elastic lines):** dropping from 12 m below a bridge beam with 12 m/s
-  forward: the line catches with a 12% peak stretch, then swings smoothly at ~22 m/s through
-  the bottom; reeling a loaded line raised speed 19.5 → 22.6 m/s in 0.5 s.
+  forward: the line catches with a 16% peak stretch, then swings smoothly at ~22 m/s through
+  the bottom; reeling a loaded line raised speed 19.5 → 22.8 m/s in 0.5 s.
 
 ### 4.3 Wall movement
 - **Wall-run:** when moving fast into a wall with Shift held, run along or up it for a
@@ -199,9 +200,21 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
     stream like a garden hose. The far end is drawn at the gameplay tip. Particles are capped
     at 160 by thinning the oldest half.
   - On attach, the curved stream blends into the straight elastic line over 0.15 s.
+  - **Readability (the stream lives only ~0.25 s at short range, at 110 m/s, which the user chose to keep):**
+    - a **muzzle flash** at the nozzle when firing starts (0.14 s);
+    - a **glowing tip glob** at the stream's head, constant on-screen size, so it reads at any distance;
+    - the stream is **brighter and ~35% thicker** than an attached line, and its core is
+      **dashed with pulses flowing outward** at 45 m/s;
+    - a **catch splat** (expanding glow that fades over 0.5 s) where the stream attaches.
+  - **Rendering pitfall (bug found in playtest):** three.js `Line2`/`LineGeometry` locks its
+    drawable segment count the first time it renders. A line that grows by calling
+    `setPositions()` with longer arrays is silently truncated, which made the stream invisible
+    (only a stub at the hand). Every strip is allocated once at a fixed capacity (168 points)
+    and updated in place, drawing only `instanceCount = points − 1` segments.
 - **Release = disconnect.** The strand separates from the hand and **lingers in the world for
-  2.5 s**, simulated as a 24-point Verlet strand under gravity (it rests on the street rather
-  than sinking through). If it was attached it **keeps hanging from its anchor**; if it was
+  2.5 s**, simulated as a 24-point position-based strand with explicit velocities (correct
+  for any frame time), under gravity. It rests on the street rather than sinking through, and it
+  keeps the momentum it had (a stream released mid-flight keeps flying forward as it falls). If it was attached it **keeps hanging from its anchor**; if it was
   still in flight it falls freely. It fades over the last 0.7 s and is removed.
   **At most 8 strands** exist at once (the oldest is recycled), so the load never grows.
 - **HUD:** an orange diamond marks the predicted impact point (4 s look-ahead, using the same
@@ -420,7 +433,8 @@ src/
   drive audio, camera shake and arm recoil. Gameplay never calls audio or rendering directly.
 - Debug: `?shot&cam=x,y,z,yawDeg,pitchDeg[&lines]` hides the start overlay, places the camera,
   optionally attaches both lines, and exposes `window.__game` (`debugPlay()` runs the sim without
-  pointer lock). Used for automated screenshots and scripted play.
+  pointer lock; `debugTimeScale` slows time for frame captures). Used for automated screenshots
+  and scripted play.
 
 - All tunable gameplay numbers live in `src/config/`, never hard-coded in systems.
 
@@ -496,3 +510,6 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | Web = continuous stream while held, ballistic drop, unlimited range | Requested: realistic web with bullet-like drop |
 | 2026-11-22 | Released strands linger 2.5 s under gravity, then fade; max 8 | Requested: webs stay briefly but never pile up |
 | 2026-11-22 | HUD impact marker from ballistic prediction | Makes aiming with drop learnable |
+| 2026-11-22 | Keep stream at 110 m/s; add muzzle flash, tip glow, flowing pulses, catch splat | User chose speed over slower visible flight |
+| 2026-11-22 | Fixed-capacity line buffers | Growing Line2 geometry was silently truncated → stream invisible |
+| 2026-11-22 | Lines softer: elasticity 300, ζ 0.3, max stretch 50% | Requested: "a bit more elastic" |

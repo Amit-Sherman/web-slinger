@@ -38,6 +38,8 @@ export class Game {
   private acc = 0;
   private last = 0;
   private time = 0;
+  /** Debug only: slow-motion factor for automated frame captures. */
+  debugTimeScale = 1;
   private renderPos = new THREE.Vector3();
   private eye = new THREE.Vector3();
   private launchVel = new THREE.Vector3();
@@ -170,7 +172,7 @@ export class Game {
   }
 
   private frame(now: number): void {
-    const dt = Math.min(0.1, (now - this.last) / 1000);
+    const dt = Math.min(0.1, (now - this.last) / 1000) * this.debugTimeScale;
     this.last = now;
     const s = this.player.state;
 
