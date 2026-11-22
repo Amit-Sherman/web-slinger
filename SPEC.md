@@ -202,7 +202,22 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - **[PROPOSED]** Halftone-dot shading in shadows, speed lines at high velocity,
   comic-style impact effects.
 - **[DECIDED]** Hero palette: teal, graphite and orange; lines are glowing cyan (§9).
-- Audio, music, city color palette: **[OPEN]**.
+- **[DECIDED]** City palette, **warm comic city**:
+  - Day: sandstone, cream and terracotta buildings; blue-grey glass; light blue sky.
+  - Sunset: gold and magenta sky, long purple shadows.
+  - Night: deep navy sky, warm yellow lit windows and street lamps; the cyan lines glow
+    and stand out the most.
+  - Ink outlines: dark brown-black (not pure black).
+  - The teal/cyan/orange hero colors must always contrast against the warm city.
+
+### 8.1 Audio — [DECIDED: movement SFX only in v1]
+- Line fire (whip-crack launch), attach (metallic clack), miss (fizzle), release (snap).
+- Reel motor whir per hand, pitch rising with reel speed; stereo-panned left/right by hand.
+- Wind noise rising in volume and pitch with speed.
+- Landings scaled by impact (soft tap → heavy thud), footsteps, wall-run steps, wall-jump.
+- No music and no city ambience in v1 (could come later).
+- **[PROPOSED]** Sources: CC0-licensed sound files bundled in the image, or synthesized
+  with the Web Audio API. Never use copyrighted game/film audio.
 
 ---
 
@@ -258,7 +273,14 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   (idle / firing / attached) and current line length in metres.
 - Nothing else on screen by default. A settings toggle can show extra info (speed, altitude).
 
-### 12.2 Menus — [OPEN]
+### 12.2 Start flow & menus — [DECIDED: straight into the city]
+- Opening the page shows the city with a single overlay: **"Click to play"** (needed for
+  pointer lock and audio unlock). Clicking spawns Lineweaver on a downtown rooftop.
+- No title screen and no tutorial in v1.
+- **Esc → pause screen:** Resume, Controls (full key list from §6), Settings.
+- **Settings:** graphics preset, render scale, FOV, mouse sensitivity, invert-Y,
+  motion effects / camera roll toggles, head-tracking on/off + recenter, freeze time of day,
+  master/SFX volume. Saved in `localStorage`.
 
 ---
 
@@ -298,7 +320,32 @@ src/
 
 ---
 
-## 15. Decision Log
+## 15. Milestones & Definition of Done — [DECIDED]
+
+**The v1 release gate is the core swing feel.** Everything else in this spec is the full
+target, built in later milestones. A milestone ships only when the previous one still feels right.
+
+| Milestone | Contents |
+|---|---|
+| **M1 = v1 (release gate)** | Docker build, click-to-play, procedural city geometry (buildings, streets, rooftops, cel-shaded with outlines, fixed sun), first-person camera + arms, two independent lines with fire/attach/miss/release, per-hand reel in/out, momentum on release, air control, superhero landings, wall-run / crawl / jump, minimal HUD, pause + settings, movement SFX |
+| M2 | Abilities: web-zip/launch, dual-line slingshot, pull/yank, web balls |
+| M3 | Webcam head-tracking |
+| M4 | Living city: day/night cycle, night lighting, traffic and pedestrians |
+| Later | Game modes (crime, races, collectibles), gamepad, multiplayer, third-person/photo mode |
+
+**M1 "swing feel" acceptance checks:**
+- From a rooftop you can cross 1 km of downtown without touching the ground, using only
+  left/right lines and reeling, after a few minutes of practice.
+- Releasing at the bottom of an arc gives a clear speed boost; releasing at the top gives
+  height. Chaining lines builds speed up to ~40–60 m/s without feeling uncontrollable.
+- Letting a line out mid-swing visibly lowers and widens the arc; reeling in tightens it
+  and speeds you up (angular momentum).
+- Holding both lines at once behaves physically: you hang between both anchors.
+- A miss is always obvious: the line visibly flies out and falls.
+- No jitter: ropes and the camera are smooth at 60 fps, with physics on a fixed timestep.
+- Landing, wall contact and wall-jumps never get the player stuck in geometry.
+
+## 16. Decision Log
 
 | Date | Decision | Reason |
 |------|----------|--------|
@@ -325,3 +372,7 @@ src/
 | 2026-11-22 | Ability keys: F zip, MMB pull, R web ball, Ctrl crouch/drop, H recenter, Esc pause | |
 | 2026-11-22 | Minimal visor-styled HUD: crosshair + two rope gauges | Keeps the first-person view clean |
 | 2026-11-22 | Target 60 fps @1080p on integrated-GPU laptops, Low/Med/High presets | Friends' laptops must run it |
+| 2026-11-22 | Warm comic city palette (sandstone/cream/terracotta, brown-black ink) | Cyan/teal hero contrasts with it |
+| 2026-11-22 | v1 audio = movement SFX only, no music or ambience | |
+| 2026-11-22 | Start straight into the city (click to play), no title or tutorial | Fastest path to swinging |
+| 2026-11-22 | v1 release gate = core swing feel; abilities, head-tracking, living city are M2–M4 | Nail the feel first |
