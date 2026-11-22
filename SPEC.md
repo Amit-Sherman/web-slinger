@@ -70,8 +70,9 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 ### 3.1 First-person mouse-look (primary)
 - The camera sits at the hero's eyes. Mouse controls yaw/pitch (pointer lock).
 - Look direction is **independent of velocity**: you can look behind you mid-swing.
-- **[PROPOSED]** The hero's forearms/hands and web-shooters are visible in first person,
+- **[DECIDED]** The hero's forearms/hands and web-shooters are visible in first person,
   animated when firing, holding and reeling webs. Webs visibly leave each wrist.
+  No torso/legs are rendered (looking down shows nothing).
 - **[PROPOSED]** Speed feel: FOV widens with speed (base 85°, up to ~100°), subtle speed
   lines, wind audio. Optional slight camera roll on hard turns (can be turned off).
 - **[PROPOSED]** Comfort settings: FOV slider, motion-effects toggle, camera-roll toggle,
@@ -85,8 +86,9 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - Pose comes from MediaPipe Face Landmarker (facial transformation matrix), smoothed
   (One-Euro filter or similar) to avoid jitter.
 - "Recenter" key/button sets the current head pose as neutral.
-- **[PROPOSED]** Webs are aimed by the **screen-center crosshair**, so head glances
-  move what you aim at too. (Alternative to decide: aim follows mouse only.)
+- **[DECIDED]** Web aim follows the **mouse/body direction only**. With head-tracking on,
+  the crosshair is drawn where the aim ray lands, so it drifts on screen when you glance
+  with your head. Glance to spot an anchor, then aim at it with the mouse.
 
 ---
 
@@ -122,7 +124,12 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   so you can chain wall-to-wall or wall-to-web.
 - Landing on the ground or rooftops: run, sprint and jump normally.
 
-### 4.4 Falling / damage — [OPEN]
+### 4.4 Falling / damage — [DECIDED: superhero landing]
+- No fall damage and no health in v1.
+- Hard landings play a heavy impact: camera shake, short crouch/roll, brief slowdown,
+  scaled by impact speed. Soft landings flow straight into running.
+- Hitting a wall at high speed (without wall-run) causes a short stagger and kills
+  most of your momentum.
 
 ---
 
@@ -163,7 +170,7 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 
 - All input goes through an **action map** (raw keys → named actions), so keys can be
   rebound and gamepad support added later without touching gameplay code.
-- Gamepad support: **[OPEN]** (v1 or later).
+- **[DECIDED]** Gamepad support is **not in v1**; the action map makes it easy to add later.
 
 ---
 
@@ -175,8 +182,14 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   residential, an industrial waterfront), a large park, and a river crossed by bridges.
 - Buildings: varied footprints and heights, rooftop details (water towers, AC units,
   antennas, billboards) that double as web anchors and parkour props.
-- Streets: roads, sidewalks, lamp posts, trees; simple ambient traffic and pedestrians: **[OPEN]**.
-- City size, streaming/chunking, day/night: **[OPEN]**.
+- Streets: roads, sidewalks, lamp posts, trees.
+- **[DECIDED]** Simple ambient **traffic and pedestrians**: cars follow the road graph,
+  pedestrians walk sidewalks. Low-detail, cel-shaded, no complex AI in v1.
+- **[DECIDED]** **Day/night cycle:** the sun moves across the sky; at night, street lamps
+  and lit building windows turn on. **[PROPOSED]** one full cycle = 20 real minutes, with a
+  settings option to freeze the time of day.
+- **[DECIDED]** Fixed, medium-size city generated at load (no chunk streaming in v1).
+  **[PROPOSED]** about 2 km × 2 km.
 
 ---
 
@@ -272,3 +285,8 @@ src/
 | 2026-11-22 | Cel-shaded comic-book style | Fits procedural geometry, cheap to render |
 | 2026-11-22 | v1 = free roam; modular game modes for later | Ship the swinging feel first |
 | 2026-11-22 | Single-player v1, multiplayer-ready architecture | |
+| 2026-11-22 | Superhero landing, no fall damage | Keeps flow; no frustration |
+| 2026-11-22 | Web aim = mouse only; head-tracking is look-only | Precision aiming stays on the mouse |
+| 2026-11-22 | First-person arms + web-shooters visible, no full body | Immersion without full-body IK complexity |
+| 2026-11-22 | v1 world: day/night cycle, ambient traffic & pedestrians, fixed medium city | |
+| 2026-11-22 | Gamepad deferred past v1 | |
