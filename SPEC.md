@@ -133,7 +133,7 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 
 ---
 
-## 5. Web Abilities — [DECIDED list / PROPOSED bindings]
+## 5. Web Abilities — [DECIDED]
 
 1. **Swing (per hand):** fire/hold/release with LMB (left) or RMB (right). Reel per hand (§6).
 2. **Web-zip / point launch:** shoot a web to the targeted point, zip straight to it fast,
@@ -161,12 +161,13 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 | W A S D | Move / air-steer / crawl on walls | DECIDED |
 | Space | Jump / wall-jump / launch at end of zip | DECIDED |
 | Shift (alone) | Sprint on ground / wall-run | PROPOSED |
-| F | Web-zip | PROPOSED |
-| Middle mouse | Web-pull / yank | PROPOSED |
-| R | Web-ball shot | PROPOSED |
-| Ctrl / C | Crouch, drop off a wall | PROPOSED |
-| H | Recenter head-tracking | PROPOSED |
-| Esc | Pause / settings | PROPOSED |
+| F | Web-zip | DECIDED |
+| Middle mouse | Web-pull / yank | DECIDED |
+| R | Web-ball shot | DECIDED |
+| Ctrl | Crouch, drop off a wall | DECIDED |
+| Tab | Reserved (unused in v1) | DECIDED |
+| H | Recenter head-tracking | DECIDED |
+| Esc | Pause / settings | DECIDED |
 
 - All input goes through an **action map** (raw keys → named actions), so keys can be
   rebound and gamepad support added later without touching gameplay code.
@@ -200,14 +201,28 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   saturated colors.
 - **[PROPOSED]** Halftone-dot shading in shadows, speed lines at high velocity,
   comic-style impact effects.
-- Audio, music, color palette: **[OPEN]**.
+- **[DECIDED]** Hero palette: teal, graphite and orange; lines are glowing cyan (§9).
+- Audio, music, city color palette: **[OPEN]**.
 
 ---
 
-## 9. Character — [OPEN]
+## 9. Character — [DECIDED: Lineweaver]
 
-- **[DECIDED]** Placeholder hero for now; name, suit and look to be designed later.
-  Must be an original design.
+- **Name:** Lineweaver. An original hero, not based on any existing franchise.
+- **Vibe:** a precise, self-made inventor who built their own gear. Technical and
+  controlled, not mystical.
+- **Fiction:** the "webs" are **carbon-fiber cables** fired from wrist-mounted
+  launchers. In-world they're called *lines*; code and this spec may still say "web".
+- **Suit:** fitted suit of teal and graphite panels with orange accents at the joints and seams.
+- **Head:** smooth, featureless helmet with a single horizontal visor strip that glows faintly.
+- **Wrists (visible in first person):** chunky cable reels with spools that visibly spin
+  while reeling in or letting out. Each reel has a small light showing its state
+  (dim = idle, cyan = attached, orange = firing/missed).
+- **Lines:** thin, glowing **cyan** cables. They snap taut with a slight vibration when
+  tension spikes and go slack (sagging curve) when shorter than their length.
+- **HUD fiction:** the on-screen HUD *is* the helmet visor display (§12).
+- Third-person model: not needed in v1 (first-person only). Needed later for
+  multiplayer and photo mode.
 
 ---
 
@@ -232,15 +247,31 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 
 ---
 
-## 12. UI / HUD / Menus — [OPEN]
+## 12. UI / HUD / Menus
 
-- Minimal HUD **[PROPOSED]**: center crosshair that changes when the target is in web
-  range / attachable; small left/right indicators showing each hand's web state and
-  rope length; speed readout (optional).
+### 12.1 HUD — [DECIDED: minimal, visor-styled]
+- Styled as Lineweaver's **visor display**: thin cyan lines, slight glow, faint scanline
+  texture, monospace numbers.
+- **Crosshair:** hollow ring when the aim ray hits nothing in range; **solid** when it hits
+  an attachable surface within max range. Small distance readout next to it (optional).
+- **Two rope gauges** (bottom left = left hand, bottom right = right hand): state
+  (idle / firing / attached) and current line length in metres.
+- Nothing else on screen by default. A settings toggle can show extra info (speed, altitude).
+
+### 12.2 Menus — [OPEN]
 
 ---
 
-## 13. Performance Targets — [OPEN]
+## 13. Performance Targets — [DECIDED]
+
+- **60 fps at 1080p on a mid-range laptop with integrated graphics** (recent Intel Iris Xe /
+  AMD Radeon iGPU class) on the **Medium** preset.
+- Graphics presets: **Low / Medium / High**, auto-detected on first launch, changeable in
+  settings. Presets scale shadow resolution, draw distance, outline pass resolution,
+  traffic/pedestrian density and render resolution scale.
+- **[PROPOSED]** techniques: instanced meshes for repeated props and windows, merged
+  building geometry per city block, frustum culling, distance-based LOD, a single
+  shadow-casting sun with cascaded or tight-fitted shadow maps.
 
 ---
 
@@ -290,3 +321,7 @@ src/
 | 2026-11-22 | First-person arms + web-shooters visible, no full body | Immersion without full-body IK complexity |
 | 2026-11-22 | v1 world: day/night cycle, ambient traffic & pedestrians, fixed medium city | |
 | 2026-11-22 | Gamepad deferred past v1 | |
+| 2026-11-22 | Hero = Lineweaver: tech inventor, teal/graphite/orange suit, glowing cyan cable lines | Original, and the visor justifies the HUD |
+| 2026-11-22 | Ability keys: F zip, MMB pull, R web ball, Ctrl crouch/drop, H recenter, Esc pause | |
+| 2026-11-22 | Minimal visor-styled HUD: crosshair + two rope gauges | Keeps the first-person view clean |
+| 2026-11-22 | Target 60 fps @1080p on integrated-GPU laptops, Low/Med/High presets | Friends' laptops must run it |
