@@ -592,6 +592,10 @@ What was done, and the rules to keep:
    render scale drops by 0.1 (min 0.5); after 3 s under 15 ms it rises by 0.05 up to the user's
    "Render scale (max)".
 8. **Head-tracking in a Web Worker** (see §3.2.1).
+- **No FPS cap:** the game renders on `requestAnimationFrame` (browser vsync = monitor refresh;
+  120/144 Hz monitors run at 120/144). The sim is a fixed 60 Hz with interpolation and everything
+  visual is dt-based, so higher refresh only adds smoothness. Firefox on Linux may fall back to
+  60 Hz; `about:config` → `layout.frame_rate` = monitor Hz fixes it.
 - **Perf overlay:** press **P** (or `?perf`). It shows FPS, average/worst frame, CPU ms per system
   (sim, physics, props, visuals, aim+hud, head, render), draw calls, triangles and render scale.
 
@@ -731,5 +735,6 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | Repo made public, read-only (interaction limits, issues/wiki off); history re-authored to noreply email | Share with everyone without exposing a personal email |
 | 2026-11-22 | M3 merged to `main` | Head-tracking confirmed working with a real webcam |
 | 2026-11-22 | Optimization pass: trimesh statics, idle-step skip, prop/static culling, worker head-tracking, auto resolution | User: low FPS + stutters; ~4× less CPU, ~10× fewer triangles |
+| 2026-11-22 | Perf pass merged to `main`; FPS is never capped by the game (browser vsync only) | User: feels great; asked not to cap FPS |
 | 2026-11-22 | Webcam video element attached to the page, wait-for-frames + retries | Bug: Firefox aborted playback of the detached video |
 | 2026-11-22 | M3: MediaPipe Face Landmarker, bundled locally; camera rig + head offset; One-Euro smoothing | SPEC §3.2 as decided; offline Docker requirement |
