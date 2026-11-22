@@ -32,6 +32,7 @@ async function boot(): Promise<void> {
     menu.hideAll();
     const cam = params.get('cam')?.split(',').map(Number);
     if (cam && cam.length === 5) game.debugPose(cam[0], cam[1], cam[2], cam[3], cam[4]);
+    if (params.has('lines')) game.debugAttachLines();
     (window as unknown as { __ready: boolean }).__ready = true;
   }
 }

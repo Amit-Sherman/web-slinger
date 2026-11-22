@@ -94,6 +94,22 @@ export class Game {
     this.cam.updateAim();
   }
 
+  /** Debug helper for screenshots: attach both lines to whatever is ±25° either side of the view. */
+  debugAttachLines(): void {
+    const s = this.player.state;
+    const eye = this.player.eyePosition(new THREE.Vector3());
+    ([0, 1] as const).forEach((hand) => {
+      const yaw = this.cam.yaw + (hand === 0 ? 0.45 : -0.45);
+      const dir = new THREE.Vector3(-Math.sin(yaw) * Math.cos(0.5), Math.sin(0.5), -Math.cos(yaw) * Math.cos(0.5));
+      const hit = this.physics.raycast(eye, dir, LINES.maxRange, this.player.collider);
+      if (!hit) return;
+      const l = s.lines[hand];
+      l.kind = 'attached';
+      l.target.copy(hit.point);
+      l.length = s.pos.distanceTo(hit.point) * 0.9;
+    });
+  }
+
   start(): void {
     this.last = performance.now();
     const frame = (now: number): void => {

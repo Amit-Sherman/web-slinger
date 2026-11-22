@@ -97,32 +97,36 @@ function releaseBoost(p: PlayerState, hand: Hand): void {
 }
 
 /**
- * Velocity-level rope constraint (one-sided: ropes pull, never push). For every taut line the
- * outward radial velocity is clamped to the line's length rate (reel in / let out), plus a small,
- * capped correction for drift. Central impulses conserve angular momentum, so reeling a taut
- * line in naturally spins you faster around the anchor.
+ * Elastic lines (SPEC §4.2): each attached line is a one-sided spring-damper. It pulls only when
+ * stretched beyond its rest length, never pushes. Stiffness scales with 1/length (like a real
+ * elastic cord), so a given load gives the same *percentage* stretch on long and short lines.
+ * The forces are central, so angular momentum is conserved and reeling a loaded line in still
+ * spins you faster. A hard velocity-level stop at `maxStretch` keeps lines from stretching forever.
  */
 export function solveRopes(p: PlayerState, dt: number): void {
-  const tension = [0, 0];
-  for (let it = 0; it < LINES.solverIterations; it++) {
-    for (const hand of [0, 1] as Hand[]) {
-      const l = p.lines[hand];
-      if (l.kind !== 'attached') continue;
-      radial.subVectors(p.pos, l.target);
-      const d = radial.length();
-      if (d < l.length - 1e-3 || d < 1e-4) continue; // slack
-      radial.divideScalar(d);
-      const err = d - l.length;
-      const lengthRate = l.reel === 1 ? -LINES.reelInSpeed : l.reel === -1 ? LINES.letOutSpeed : 0;
-      const bias = Math.min((err * LINES.driftCorrection) / dt, LINES.maxCorrectionSpeed);
-      const vMax = lengthRate - bias;
-      const vr = p.vel.dot(radial);
-      if (vr > vMax) {
-        p.vel.addScaledVector(radial, vMax - vr);
-        tension[hand] += vr - vMax;
-      }
+  for (const hand of [0, 1] as Hand[]) {
+    const l = p.lines[hand];
+    l.tension = 0;
+    if (l.kind !== 'attached') continue;
+    radial.subVectors(p.pos, l.target);
+    const d = radial.length();
+    if (d <= l.length || d < 1e-4) continue; // slack
+    radial.divideScalar(d);
+    const vr = p.vel.dot(radial); // + = moving away from the anchor
+
+    // Spring-damper pull
+    const k = LINES.elasticity / l.length;
+    const c = 2 * LINES.dampingRatio * Math.sqrt(k);
+    const accel = Math.max(0, k * (d - l.length) + c * vr);
+    p.vel.addScaledVector(radial, -accel * dt);
+    l.tension = accel;
+
+    // Hard stop: never stretch past maxStretch
+    const limit = l.length * (1 + LINES.maxStretch);
+    if (d > limit) {
+      const bias = Math.min(((d - limit) * LINES.driftCorrection) / dt, LINES.maxCorrectionSpeed);
+      const v = p.vel.dot(radial);
+      if (v > -bias) p.vel.addScaledVector(radial, -bias - v);
     }
   }
-  p.lines[0].tension = tension[0];
-  p.lines[1].tension = tension[1];
 }

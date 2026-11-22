@@ -24,14 +24,18 @@ export const PLAYER = {
 export const LINES = {
   maxRange: 90,
   travelSpeed: 250,
-  reelInSpeed: 12,
-  letOutSpeed: 10,
+  reelInSpeed: 13.2,
+  letOutSpeed: 11,
   minLength: 2,
   maxLength: 110,
   attachLengthFactor: 1.0, // rope length at attach = current distance to the anchor
-  solverIterations: 2,
-  driftCorrection: 0.25, // fraction of rope over-stretch corrected per tick
-  maxCorrectionSpeed: 6, // cap on drift correction (m/s), avoids velocity spikes
+  // Elastic lines: pull (m/s²) per unit of strain. 450 → ~3.5% stretch hanging still,
+  // ~10% at the bottom of a fast swing.
+  elasticity: 450,
+  dampingRatio: 0.35, // 0 = bouncy forever, 1 = no bounce
+  maxStretch: 0.35, // hard stop at +35% of rest length
+  driftCorrection: 0.25, // fraction of over-limit stretch corrected per tick
+  maxCorrectionSpeed: 6, // cap on hard-stop correction (m/s), avoids velocity spikes
   releaseBoost: 1.5, // m/s added along velocity when the last line is released
   releaseUpBoost: 1.0, // extra m/s upward if moving upward at release
   missFallTime: 0.35,

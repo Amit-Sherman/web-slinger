@@ -112,13 +112,23 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - Hand web states: `idle → firing (travel time) → attached → released`.
 - Each attached web is a **one-sided distance constraint** (a rope: taut when stretched
   to its length, slack when closer). Both webs can be attached at once; both constraints act.
-- **[BUILT-DEFAULT] Rope solver (important for feel):** a **velocity-level** constraint, not
-  position projection. For each taut line, the outward radial velocity is clamped to the
-  line's length rate (−reel-in speed, +let-out speed, or 0), plus a small drift correction
-  capped at 6 m/s. Because the impulses are central, angular momentum is conserved
-  automatically, so reeling a taut line in mid-swing speeds you up with no extra boost.
-  *Do not* convert position corrections into velocity: in the first build that turned a
-  1 m correction into a 60 m/s jolt.
+- **[DECIDED] Elastic lines:** lines are not rigid ropes. They **stretch and pull back**
+  under load like a real spider-silk strand. Each attached line is a **one-sided
+  spring-damper** acting on velocity. It pulls only when stretched past its rest length and
+  never pushes:
+  - pull (m/s²) = `elasticity × strain + 2·ζ·√k × radialSpeed`, where `strain = (d − L)/L`,
+    `k = elasticity / L`, `elasticity = 450`, `ζ (dampingRatio) = 0.35`. Pull is never negative.
+  - Because stiffness scales with 1/L, a given load gives the same *percentage* stretch on
+    long and short lines: about 3.5% hanging still, about 5% mid-swing, and up to about 12%
+    when a line catches a fall (then a soft bounce settles).
+  - Hard stop at +35% stretch (velocity-level, correction capped at 6 m/s).
+  - Reel in / let out change the rest length L. The spring makes reeling feel slightly
+    elastic and lagging. Forces are central, so angular momentum is conserved and reeling a
+    loaded line still speeds you up.
+  - *Do not* convert position corrections into velocity: in the first build that turned a
+    1 m correction into a 60 m/s jolt.
+  - Visuals: a stretched line gets **thinner** (down to 45% width at about 18% strain), and it
+    **twangs** (vibrates) when its pull jumps suddenly, not under steady load.
 - **[BUILT-DEFAULT]** At attach, rope length = current distance to the anchor. If you are
   falling, you drop until it goes taut, then swing.
 - Release assist: +1.5 m/s along velocity (and +1 m/s up if rising) when the *last* line is released.
@@ -127,13 +137,13 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - Releasing a hand's button detaches that web; momentum carries on.
 - **[BUILT-DEFAULT]** numbers (all in `src/config/gameplay.ts`):
   - Max web range: 90 m · web travel speed: 250 m/s
-  - Reel-in speed: 12 m/s · let-out speed: 10 m/s · min rope length: 2 m
+  - Reel-in speed: 13.2 m/s · let-out speed: 11 m/s (+10% after first playtest) · min rope length: 2 m
   - Gravity: 9.81 m/s² × 1.6 (heavier-feeling arcs) · terminal velocity: ~70 m/s
   - Air control (WASD while airborne): 9 m/s² · walk 7 m/s · sprint 13 m/s · jump 9 m/s (sprint jump 11)
   - Player capsule: radius 0.4 m, total height ~1.9 m; eyes 0.7 m above centre
-- **Headless check (M1 build):** dropping from 12 m below a bridge beam with 12 m/s forward
-  gives a clean pendulum. Rope overshoot ≤ 0.07 m, ~24 m/s at the bottom; reeling a taut
-  line raised speed 19.5 → 27.9 m/s.
+- **Headless check (elastic lines):** dropping from 12 m below a bridge beam with 12 m/s
+  forward: the line catches with a 12% peak stretch, then swings smoothly at ~22 m/s through
+  the bottom; reeling a loaded line raised speed 19.5 → 22.6 m/s in 0.5 s.
 
 ### 4.3 Wall movement
 - **Wall-run:** when moving fast into a wall with Shift held, run along or up it for a
@@ -275,9 +285,19 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   launchers. In-world they're called *lines*; code and this spec may still say "web".
 - **Suit:** fitted suit of teal and graphite panels with orange accents at the joints and seams.
 - **Head:** smooth, featureless helmet with a single horizontal visor strip that glows faintly.
-- **Wrists (visible in first person):** chunky cable reels with spools that visibly spin
-  while reeling in or letting out. Each reel has a small light showing its state
-  (dim = idle, cyan = attached, orange = firing/missed).
+- **Hands & launchers (visible in first person) [DECIDED, refined after playtest]:** natural
+  gloved hands, not blocky props.
+  - Tapered teal forearm sleeve with a graphite outer panel and an orange cuff seam.
+  - Graphite gloves: a rounded palm with a teal stripe on the back, four fingers with three
+    jointed segments each, and a two-segment thumb.
+  - A **slim watch-style launcher** on top of each wrist: dark band, small body, an orange
+    bezel ring that **spins while reeling** (with a notch so the spin reads), a round face
+    light (dim = idle, cyan = attached, orange = firing/missed), and a short orange nozzle.
+    **Lines leave from the nozzle.**
+  - Poses: relaxed half-curl at rest, with the hands visible in the lower corners. On fire
+    the hand opens and the wrist flicks up. While holding a line it makes a fist and the
+    forearm rolls thumb-up (~65°) as if gripping a rope, and the arm aims at the anchor.
+    These hands and poses are Lineweaver's own, not a copy of any franchise's gestures.
 - **Lines:** thin, glowing **cyan** cables. They snap taut with a slight vibration when
   tension spikes and go slack (sagging curve) when shorter than their length.
 - **HUD fiction:** the on-screen HUD *is* the helmet visor display (§12).
@@ -438,3 +458,7 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | C added as alias for Ctrl (crouch/drop) | Ctrl+W closes the browser tab and can't be blocked |
 | 2026-11-22 | All SFX synthesized in Web Audio | No asset licensing, works offline |
 | 2026-11-22 | Recessed river with swimming; suspension bridges as anchors | Gives the waterfront a gameplay purpose |
+| 2026-11-22 | Playtest: swinging "feels really good" | Baseline confirmed |
+| 2026-11-22 | Lines are elastic spring-dampers (450 elasticity, ζ 0.35, 35% max stretch) | Requested: lines should stretch and pull back like real silk |
+| 2026-11-22 | Reel speeds +10% (13.2 in / 11 out) | Requested after playtest |
+| 2026-11-22 | Natural gloved hands with jointed fingers + watch-style launcher | Requested: hands should look natural |

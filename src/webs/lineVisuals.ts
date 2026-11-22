@@ -19,6 +19,7 @@ interface Visual {
   retractFrom: THREE.Vector3;
   lastKind: LineState['kind'];
   vibration: number;
+  lastTension: number;
 }
 
 export class LineVisuals {
@@ -45,7 +46,7 @@ export class LineVisuals {
       l.visible = false;
       scene.add(l);
     }
-    return { core, glow, geo, positions, missStart: new THREE.Vector3(), retractFrom: new THREE.Vector3(), lastKind: 'idle', vibration: 0 };
+    return { core, glow, geo, positions, missStart: new THREE.Vector3(), retractFrom: new THREE.Vector3(), lastKind: 'idle', vibration: 0, lastTension: 0 };
   }
 
   setResolution(w: number, h: number): void {
@@ -76,6 +77,7 @@ export class LineVisuals {
 
       let sag = 0;
       let opacity = 1;
+      let thin = 1; // stretched elastic lines get thinner
       const end = this.end;
       switch (l.kind) {
         case 'firing':
@@ -86,7 +88,12 @@ export class LineVisuals {
           const dist = body.distanceTo(l.target);
           const slack = Math.max(0, l.length - dist);
           sag = Math.min(Math.sqrt(slack * l.length) * 0.5, dist * 0.4);
-          if (l.tension > 8) v.vibration = Math.min(1, v.vibration + l.tension * 0.01);
+          const strain = Math.max(0, (dist - l.length) / l.length);
+          thin = 1 - Math.min(0.55, strain * 3);
+          // Twang when the pull jumps (catching a fall, snapping taut), not under steady load
+          const jump = l.tension - v.lastTension;
+          if (jump > 4) v.vibration = Math.min(1, v.vibration + jump * 0.015);
+          v.lastTension = l.tension;
           break;
         }
         case 'missed': {
@@ -123,8 +130,11 @@ export class LineVisuals {
         pos[i * 3 + 2] = this.p.z;
       }
       v.geo.setPositions(pos);
+      if (l.kind !== 'attached') v.lastTension = 0;
       v.core.material.opacity = opacity;
       v.glow.material.opacity = 0.45 * opacity;
+      v.core.material.linewidth = 2.2 * thin;
+      v.glow.material.linewidth = 7 * thin;
     }
   }
 }
