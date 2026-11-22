@@ -39,6 +39,7 @@ export class HeadTracker {
   readonly pose: HeadPose = { ...ZERO };
 
   private video: HTMLVideoElement | null = null;
+  private videoEl: HTMLVideoElement | null = null; // in the DOM while running
   private stream: MediaStream | null = null;
   private landmarker: Landmarker | null = null;
   private neutral: HeadPose | null = null;
@@ -64,12 +65,8 @@ export class HeadTracker {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: false });
       if (gen !== this.generation) return stream.getTracks().forEach((t) => t.stop());
       this.stream = stream;
-      const video = document.createElement('video');
-      video.playsInline = true;
-      video.muted = true;
-      video.srcObject = stream;
-      await video.play();
-      this.video = video;
+      this.video = await this.startVideo(stream, gen);
+      if (gen !== this.generation) return;
 
       const vision = await import('@mediapipe/tasks-vision');
       const fileset = await vision.FilesetResolver.forVisionTasks(`${import.meta.env.BASE_URL}mediapipe/wasm`);
@@ -94,8 +91,46 @@ export class HeadTracker {
       if (gen !== this.generation) return;
       this.stop();
       this.status = 'error';
-      this.error = e instanceof Error ? e.message : String(e);
+      this.error = describeError(e);
     }
+  }
+
+  /**
+   * Play the webcam stream in a tiny invisible <video> that lives in the page. Firefox aborts
+   * playback of detached video elements ("The fetching process for the media resource was
+   * aborted…"), and play() can be interrupted, so we don't trust play(): we wait until frames
+   * actually arrive, and retry play() if they don't.
+   */
+  private async startVideo(stream: MediaStream, gen: number): Promise<HTMLVideoElement> {
+    const video = document.createElement('video');
+    video.playsInline = true;
+    video.muted = true;
+    video.autoplay = true;
+    video.setAttribute('aria-hidden', 'true');
+    Object.assign(video.style, {
+      position: 'fixed', left: '0', bottom: '0', width: '2px', height: '2px',
+      opacity: '0.01', pointerEvents: 'none', zIndex: '-1',
+    });
+    document.body.appendChild(video);
+    this.videoEl = video;
+    video.srcObject = stream;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      video.play().catch(() => { /* aborted/interrupted: we check for frames below and retry */ });
+      const ready = await new Promise<boolean>((resolve) => {
+        if (video.readyState >= 2) return resolve(true);
+        const done = (ok: boolean): void => {
+          video.removeEventListener('loadeddata', onData);
+          clearTimeout(timer);
+          resolve(ok);
+        };
+        const onData = (): void => done(true);
+        const timer = setTimeout(() => done(video.readyState >= 2), 2500);
+        video.addEventListener('loadeddata', onData);
+      });
+      if (gen !== this.generation) return video;
+      if (ready) return video;
+    }
+    throw new Error('The camera started but sent no video. Close other apps using the camera and try again.');
   }
 
   stop(): void {
@@ -103,6 +138,11 @@ export class HeadTracker {
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     this.video = null;
+    if (this.videoEl) {
+      this.videoEl.srcObject = null;
+      this.videoEl.remove();
+      this.videoEl = null;
+    }
     this.landmarker?.close();
     this.landmarker = null;
     this.status = 'off';
@@ -129,7 +169,7 @@ export class HeadTracker {
         if (mat) raw = this.poseFromMatrix(mat.data);
       } catch (e) {
         this.status = 'error';
-        this.error = e instanceof Error ? e.message : String(e);
+        this.error = describeError(e);
         return;
       }
       if (raw) {
@@ -179,5 +219,24 @@ export class HeadTracker {
       y: this.t.y / 100,
       z: -this.t.z / 100,
     };
+  }
+}
+
+/** Friendly messages for the common camera failures. */
+function describeError(e: unknown): string {
+  const name = e instanceof DOMException || e instanceof Error ? e.name : '';
+  const msg = e instanceof Error ? e.message : String(e);
+  switch (name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return 'camera permission was denied. Allow the camera for this site (icon in the address bar) and toggle head-tracking again.';
+    case 'NotFoundError':
+    case 'OverconstrainedError':
+      return 'no camera found.';
+    case 'NotReadableError':
+    case 'AbortError':
+      return 'the camera is busy or was stopped. Close other apps/tabs using the camera, then toggle head-tracking again.';
+    default:
+      return msg;
   }
 }

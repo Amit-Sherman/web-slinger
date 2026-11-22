@@ -190,7 +190,7 @@ export class Game {
   }
 
   private applySettings(s: Settings): void {
-    if (s.headTracking && this.head.status === 'off') void this.head.start();
+    if (s.headTracking && (this.head.status === 'off' || this.head.status === 'error')) void this.head.start();
     if (!s.headTracking && this.head.status !== 'off') this.head.stop();
     const preset = PRESETS[s.preset];
     this.sky.applyPreset(preset, this.scene);

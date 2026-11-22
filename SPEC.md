@@ -106,6 +106,12 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   The model `public/mediapipe/face_landmarker.task` (float16 v1, 3.7 MB, sha256 `64184e22…`) is
   committed. Everything is served by the game itself, so it **works offline in Docker**.
 - **Camera:** `getUserMedia` 640×480 front camera (needs a secure context: `localhost` qualifies).
+  The stream plays in a tiny invisible `<video>` that is **attached to the page** (Firefox aborts
+  playback of detached video elements with "The fetching process for the media resource was
+  aborted…", which broke head-tracking in the first playtest). It uses autoplay + muted, and we wait
+  for the first frame (`loadeddata`) instead of trusting `play()`, retrying up to 5×.
+  Errors map to plain messages: permission denied, no camera, camera busy.
+  Re-enabling the toggle (or changing any setting) retries after an error.
   The landmarker runs in `VIDEO` mode at ~30 Hz, GPU delegate with a CPU fallback, 1 face,
   `outputFacialTransformationMatrixes: true`.
 - **Pose from the face matrix** (camera space, cm; x = image right = the player's LEFT, y up,
@@ -678,4 +684,5 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | Web balls removed (with prop glue and splat anchors); R unbound | Playtest: "the web ball does nothing" |
 | 2026-11-22 | M2 merged to `main` | User likes it |
 | 2026-11-22 | Repo made public, read-only (interaction limits, issues/wiki off); history re-authored to noreply email | Share with everyone without exposing a personal email |
+| 2026-11-22 | Webcam video element attached to the page, wait-for-frames + retries | Bug: Firefox aborted playback of the detached video |
 | 2026-11-22 | M3: MediaPipe Face Landmarker, bundled locally; camera rig + head offset; One-Euro smoothing | SPEC §3.2 as decided; offline Docker requirement |
