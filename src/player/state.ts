@@ -3,21 +3,19 @@
 import * as THREE from 'three';
 
 export type Hand = 0 | 1; // 0 = left, 1 = right
-export type LineKind = 'idle' | 'firing' | 'attached' | 'missed' | 'retracting';
+export type LineKind = 'idle' | 'firing' | 'attached';
 export type MoveMode = 'ground' | 'air' | 'wall' | 'wallrun' | 'swim';
 
 export interface LineState {
   kind: LineKind;
-  /** Anchor (attached) or where the line is flying to / fell from (firing, missed). */
+  /** Anchor point while attached; the stream's flying tip while firing. */
   target: THREE.Vector3;
-  hit: boolean;
-  /** 0..1 travel progress while firing. */
-  progress: number;
-  travelTime: number;
-  /** Rope length while attached. */
+  /** Tip velocity while firing (ballistic: gravity acts on it). */
+  tipVel: THREE.Vector3;
+  /** Seconds the current stream has been flying. */
+  flightTime: number;
+  /** Rest length while attached. */
   length: number;
-  /** Generic timer for missed / retracting animations. */
-  timer: number;
   /** Constraint correction speed last tick (m/s), drives the taut "twang" visual. */
   tension: number;
   /** -1 letting out, 0 none, 1 reeling in. */
@@ -27,7 +25,6 @@ export interface LineState {
 export type GameEvent =
   | { type: 'fire'; hand: Hand }
   | { type: 'attach'; hand: Hand }
-  | { type: 'miss'; hand: Hand }
   | { type: 'release'; hand: Hand }
   | { type: 'land'; impact: number }
   | { type: 'step'; sprint: boolean }
@@ -54,8 +51,8 @@ export interface PlayerState {
 
 function newLine(): LineState {
   return {
-    kind: 'idle', target: new THREE.Vector3(), hit: false, progress: 0, travelTime: 0,
-    length: 0, timer: 0, tension: 0, reel: 0,
+    kind: 'idle', target: new THREE.Vector3(), tipVel: new THREE.Vector3(), flightTime: 0,
+    length: 0, tension: 0, reel: 0,
   };
 }
 

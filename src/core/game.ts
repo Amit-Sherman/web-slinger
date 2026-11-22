@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { Sfx } from '../audio/sfx';
 import { FirstPersonCamera } from '../camera/firstPerson';
-import { LANDING, LINES, PHYSICS } from '../config/gameplay';
+import { LANDING, PHYSICS } from '../config/gameplay';
 import { PRESETS, type Settings, saveSettings } from '../config/settings';
 import { Input } from '../input/input';
 import { FreeRoamMode, type GameMode, type ModeContext } from '../modes/gameMode';
@@ -14,6 +14,7 @@ import type { RenderPipeline } from '../render/pipeline';
 import { Sky } from '../render/sky';
 import { Hud } from '../ui/hud';
 import type { Menu } from '../ui/menu';
+import { launchVelocity, predictImpact } from '../webs/ballistics';
 import { LineVisuals } from '../webs/lineVisuals';
 import type { CityData } from '../world/cityGen';
 import { buildCity } from '../world/cityWorld';
@@ -39,6 +40,7 @@ export class Game {
   private time = 0;
   private renderPos = new THREE.Vector3();
   private eye = new THREE.Vector3();
+  private launchVel = new THREE.Vector3();
   private wrists: [THREE.Vector3, THREE.Vector3] = [new THREE.Vector3(), new THREE.Vector3()];
 
   constructor(
@@ -94,6 +96,14 @@ export class Game {
     this.cam.updateAim();
   }
 
+  /** Debug helper for automated tests: run the simulation without pointer lock. */
+  debugPlay(): void {
+    this.playing = true;
+    this.input.enabled = true;
+    this.menu.hideAll();
+    this.hud.show(true);
+  }
+
   /** Debug helper for screenshots: attach both lines to whatever is ±25° either side of the view. */
   debugAttachLines(): void {
     const s = this.player.state;
@@ -101,7 +111,7 @@ export class Game {
     ([0, 1] as const).forEach((hand) => {
       const yaw = this.cam.yaw + (hand === 0 ? 0.45 : -0.45);
       const dir = new THREE.Vector3(-Math.sin(yaw) * Math.cos(0.5), Math.sin(0.5), -Math.cos(yaw) * Math.cos(0.5));
-      const hit = this.physics.raycast(eye, dir, LINES.maxRange, this.player.collider);
+      const hit = this.physics.raycast(eye, dir, 150, this.player.collider);
       if (!hit) return;
       const l = s.lines[hand];
       l.kind = 'attached';
@@ -192,13 +202,14 @@ export class Game {
     this.arms.update(s.lines, speed, s.mode === 'ground', dt);
     this.arms.wristWorld(0, this.wrists[0]);
     this.arms.wristWorld(1, this.wrists[1]);
-    this.lineVisuals.update(s.lines, this.wrists, this.renderPos, dt);
+    this.lineVisuals.update(s.lines, this.wrists, this.renderPos, this.cam.aim, s.vel, this.playing ? dt : 0);
     this.sky.update(this.cam.camera.position, this.renderPos, this.cam.camera.far);
     this.sfx.update(this.playing ? speed : 0, s.lines);
 
     if (this.playing) {
-      const hit = this.physics.raycast(this.eye, this.cam.aim, LINES.maxRange, this.player.collider);
-      this.hud.update(hit, s.lines, [s.pos.distanceTo(s.lines[0].target), s.pos.distanceTo(s.lines[1].target)], speed, s.pos.y);
+      // Where would a stream fired right now land? (ballistic drop + inherited velocity)
+      const impact = predictImpact(this.eye, launchVelocity(this.launchVel, this.cam.aim, s.vel), this.physics, this.player.collider);
+      this.hud.update(impact, this.cam.camera, s.lines, [s.pos.distanceTo(s.lines[0].target), s.pos.distanceTo(s.lines[1].target)], speed, s.pos.y);
     }
 
     const speedLines = this.settings.motionEffects ? THREE.MathUtils.clamp((speed - 30) / 35, 0, 1) : 0;

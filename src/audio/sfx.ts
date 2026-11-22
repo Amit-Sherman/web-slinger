@@ -9,6 +9,7 @@ export class Sfx {
   private noise!: AudioBuffer;
   private wind!: { gain: GainNode; filter: BiquadFilterNode };
   private reels: { osc: OscillatorNode; gain: GainNode; filter: BiquadFilterNode }[] = [];
+  private streams: GainNode[] = [];
 
   /** Must be called from a user gesture (browsers block audio until then). */
   unlock(): void {
@@ -55,6 +56,22 @@ export class Sfx {
       osc.connect(f).connect(g).connect(p).connect(this.sfx);
       osc.start();
       this.reels.push({ osc, gain: g, filter: f });
+
+      // Web stream hiss while a hand is firing
+      const ns = ctx.createBufferSource();
+      ns.buffer = this.noise;
+      ns.loop = true;
+      const nf = ctx.createBiquadFilter();
+      nf.type = 'bandpass';
+      nf.frequency.value = 4200;
+      nf.Q.value = 1.4;
+      const ng = ctx.createGain();
+      ng.gain.value = 0;
+      const np = ctx.createStereoPanner();
+      np.pan.value = pan;
+      ns.connect(nf).connect(ng).connect(np).connect(this.sfx);
+      ns.start(0, pan > 0 ? 1 : 0);
+      this.streams.push(ng);
     }
   }
 
@@ -121,9 +138,6 @@ export class Sfx {
         this.tone({ dur: 0.07, gain: 0.25, type: 'square', f0: 1400, f1: 420, pan: this.panFor(e.hand) });
         this.burst({ dur: 0.05, gain: 0.35, type: 'highpass', f0: 3000, f1: 2000, pan: this.panFor(e.hand) });
         break;
-      case 'miss': // fizzle
-        this.burst({ dur: 0.35, gain: 0.2, type: 'lowpass', f0: 2400, f1: 300, pan: this.panFor(e.hand), delay: 0.05 });
-        break;
       case 'release': // snap
         this.tone({ dur: 0.06, gain: 0.18, type: 'triangle', f0: 900, f1: 1700, pan: this.panFor(e.hand) });
         break;
@@ -172,6 +186,7 @@ export class Sfx {
       r.gain.gain.setTargetAtTime(on ? 0.06 : 0, t, 0.04);
       r.osc.frequency.setTargetAtTime(l.reel === 1 ? 140 : 95, t, 0.05);
       r.filter.frequency.setTargetAtTime(l.reel === 1 ? 1400 : 800, t, 0.05);
+      this.streams[i].gain.setTargetAtTime(l.kind === 'firing' ? 0.12 : 0, t, l.kind === 'firing' ? 0.02 : 0.06);
     });
   }
 }

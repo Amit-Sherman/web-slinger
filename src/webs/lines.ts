@@ -1,4 +1,5 @@
-// Two independent lines (SPEC §4.2): fire / attach / miss / release, per-hand reel, rope constraint.
+// Two independent lines (SPEC §4.2, §5.1): ballistic web stream / attach / release, per-hand reel,
+// elastic rope.
 
 import * as THREE from 'three';
 import { LINES } from '../config/gameplay';
@@ -6,11 +7,11 @@ import type { Physics } from '../core/physics';
 import type { InputSnapshot } from '../input/input';
 import type { Hand, PlayerState } from '../player/state';
 import type RAPIER from '@dimforge/rapier3d-compat';
+import { launchVelocity, stepTip } from './ballistics';
 
 const FIRE: ['fireLeft', 'fireRight'] = ['fireLeft', 'fireRight'];
 const REEL: ['reelLeft', 'reelRight'] = ['reelLeft', 'reelRight'];
 
-const tmp = new THREE.Vector3();
 const radial = new THREE.Vector3();
 
 export function anyAttached(p: PlayerState): boolean {
@@ -31,40 +32,35 @@ export function updateLines(
     const l = p.lines[hand];
     l.reel = 0;
 
-    if (input.pressed[FIRE[hand]] && (l.kind === 'idle' || l.kind === 'missed' || l.kind === 'retracting')) {
-      const hit = physics.raycast(eye, aim, LINES.maxRange, self);
+    if (input.pressed[FIRE[hand]] && l.kind === 'idle') {
+      // Start a stream: the tip leaves just in front of the eyes and flies ballistically
       l.kind = 'firing';
-      l.hit = !!hit;
-      l.target.copy(hit ? hit.point : tmp.copy(aim).multiplyScalar(LINES.maxRange).add(eye));
-      l.progress = 0;
-      l.travelTime = Math.max(0.02, eye.distanceTo(l.target) / LINES.travelSpeed);
+      l.target.copy(eye).addScaledVector(aim, 0.4);
+      launchVelocity(l.tipVel, aim, p.vel);
+      l.flightTime = 0;
       p.events.push({ type: 'fire', hand });
     }
 
-    if (!input.down[FIRE[hand]] && (l.kind === 'firing' || l.kind === 'attached')) {
+    if (!input.down[FIRE[hand]] && l.kind !== 'idle') {
       if (l.kind === 'attached') releaseBoost(p, hand);
-      l.kind = 'retracting';
-      l.timer = LINES.retractTime;
+      l.kind = 'idle';
       p.events.push({ type: 'release', hand });
       continue;
     }
 
     switch (l.kind) {
-      case 'firing':
-        l.progress += dt / l.travelTime;
-        if (l.progress >= 1) {
-          l.progress = 1;
-          if (l.hit) {
-            l.kind = 'attached';
-            l.length = THREE.MathUtils.clamp(p.pos.distanceTo(l.target) * LINES.attachLengthFactor, LINES.minLength, LINES.maxLength);
-            p.events.push({ type: 'attach', hand });
-          } else {
-            l.kind = 'missed';
-            l.timer = LINES.missFallTime;
-            p.events.push({ type: 'miss', hand });
-          }
+      case 'firing': {
+        l.flightTime += dt;
+        if (l.flightTime > LINES.maxFlightTime) break; // keeps streaming visually, no more hit tests
+        const hit = stepTip(l.target, l.tipVel, dt, physics, self);
+        if (hit) {
+          l.kind = 'attached';
+          l.target.copy(hit.point);
+          l.length = THREE.MathUtils.clamp(p.pos.distanceTo(l.target) * LINES.attachLengthFactor, LINES.minLength, LINES.maxLength);
+          p.events.push({ type: 'attach', hand });
         }
         break;
+      }
       case 'attached':
         if (input.down[REEL[hand]]) {
           if (input.down.modifier) {
@@ -78,11 +74,6 @@ export function updateLines(
             }
           }
         }
-        break;
-      case 'missed':
-      case 'retracting':
-        l.timer -= dt;
-        if (l.timer <= 0) l.kind = 'idle';
         break;
     }
   }

@@ -207,7 +207,7 @@ export class Arms {
 
       // Hand pose: open + wrist flick right after firing, fist while holding a line, relaxed otherwise
       arm.flick = Math.max(0, arm.flick - dt * 5);
-      const targetCurl = arm.flick > 0.4 ? 0 : active ? 1 : l.kind === 'retracting' ? 0.15 : 0.3;
+      const targetCurl = arm.flick > 0.4 ? 0 : active ? 1 : 0.3;
       arm.curl += (targetCurl - arm.curl) * Math.min(1, dt * (targetCurl > arm.curl ? 14 : 9));
       const flick = Math.sin(arm.flick * Math.PI);
       arm.wrist.rotation.x = -0.55 * flick + (active ? 0.12 : 0.05);
@@ -225,9 +225,9 @@ export class Arms {
       t1.rotation.x = 0.15 + 0.6 * arm.curl;
 
       // Bezel spins while reeling / paying out; face light shows line state
-      const spin = l.kind === 'firing' ? 40 : l.reel !== 0 ? 18 * l.reel : l.kind === 'retracting' ? 30 : 0;
+      const spin = l.kind === 'firing' ? 40 : l.reel !== 0 ? 18 * l.reel : 0;
       arm.bezel.rotation.z += spin * dt;
-      const c = l.kind === 'attached' ? CYAN : l.kind === 'firing' || l.kind === 'missed' ? ORANGE : DIM;
+      const c = l.kind === 'attached' ? CYAN : l.kind === 'firing' ? ORANGE : DIM;
       arm.faceMat.color.lerp(c, Math.min(1, dt * 20));
     }
   }

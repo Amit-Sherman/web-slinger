@@ -22,12 +22,16 @@ export const PLAYER = {
 };
 
 export const LINES = {
-  maxRange: 90,
-  travelSpeed: 250,
+  // Web stream (SPEC §5.1): no range limit, ballistic drop.
+  launchSpeed: 110, // m/s along the aim
+  webGravity: 9.81, // web strands are light: normal gravity, not the player's heavier 1.6×
+  inheritVelocity: 0.5, // fraction of the player's velocity the stream inherits
+  predictionTime: 4, // seconds of trajectory the HUD impact marker looks ahead
+  maxFlightTime: 30, // stop testing for hits after this (the stream keeps flowing visually)
   reelInSpeed: 13.2,
   letOutSpeed: 11,
   minLength: 2,
-  maxLength: 110,
+  maxLength: 5000, // effectively unlimited (city diagonal is ~2.8 km); webs have no range limit
   attachLengthFactor: 1.0, // rope length at attach = current distance to the anchor
   // Elastic lines: pull (m/s²) per unit of strain. 450 → ~3.5% stretch hanging still,
   // ~10% at the bottom of a fast swing.
@@ -38,8 +42,10 @@ export const LINES = {
   maxCorrectionSpeed: 6, // cap on hard-stop correction (m/s), avoids velocity spikes
   releaseBoost: 1.5, // m/s added along velocity when the last line is released
   releaseUpBoost: 1.0, // extra m/s upward if moving upward at release
-  missFallTime: 0.35,
-  retractTime: 0.12,
+  // Released strands linger, fall under gravity, then fade (capped so they never pile up)
+  strandLifetime: 2.5,
+  strandFade: 0.7,
+  maxStrands: 8,
 };
 
 export const WALL = {
