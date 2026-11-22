@@ -63,6 +63,10 @@ export const WALL = {
   jumpLookSpeed: 4,
   restickCooldown: 0.3,
   attachProbe: 0.6,
+  // Grab vs. slide (SPEC §4.3): only deliberate contacts stick
+  grabApproachCos: 0.6, // stick if the approach is within ~53° of head-on (no line attached)
+  slideFriction: 0.4, // 1/s: tangential speed lost while scraping along a wall
+  scrapeSoundInterval: 0.15,
 };
 
 export const LANDING = {

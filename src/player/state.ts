@@ -36,6 +36,7 @@ export type GameEvent =
   | { type: 'step'; sprint: boolean }
   | { type: 'wallJump' }
   | { type: 'wallStick'; impact: number }
+  | { type: 'wallScrape'; speed: number }
   | { type: 'stagger'; impact: number }
   | { type: 'jump' }
   | { type: 'splash' }
@@ -58,6 +59,7 @@ export interface PlayerState {
   staggerTimer: number;
   slowTimer: number;
   stepDistance: number;
+  scrapeTimer: number;
   lines: [LineState, LineState];
   /** Middle-mouse pull line (SPEC §5.3); visually leaves the right launcher. */
   pull: LineState;
@@ -83,6 +85,7 @@ export function newPlayerState(x: number, y: number, z: number): PlayerState {
     staggerTimer: 0,
     slowTimer: 0,
     stepDistance: 0,
+    scrapeTimer: 0,
     lines: [newLine(), newLine()],
     pull: newLine(),
     events: [],

@@ -107,7 +107,7 @@ export class PlayerController {
     }
 
     this.vPre.copy(this.desired).divideScalar(dt);
-    this.move(input);
+    this.move(input, dt);
   }
 
   private ropePullsOffWall(): boolean {
@@ -237,7 +237,7 @@ export class PlayerController {
   }
 
   /** Move the capsule with collision, then resolve mode transitions. */
-  private move(input: InputSnapshot): void {
+  private move(input: InputSnapshot, dt: number): void {
     const s = this.state;
     this.cc.computeColliderMovement(this.collider, this.desired);
     const mv = this.cc.computedMovement();
@@ -270,7 +270,10 @@ export class PlayerController {
     switch (s.mode) {
       case 'air':
       case 'swim': {
-        if (wallN && s.restickTimer <= 0) return this.enterWall(wallN, input);
+        if (wallN) {
+          if (this.shouldGrab(wallN, input)) return this.enterWall(wallN, input);
+          this.scrape(wallN, dt);
+        }
         if (grounded && this.vPre.y <= 0.5) this.land();
         if (s.mode === 'swim' && s.pos.y > WATER.surfaceY + 0.6) s.mode = 'air';
         break;
@@ -295,6 +298,35 @@ export class PlayerController {
       case 'wallrun':
         this.maintainWall(input, grounded);
         break;
+    }
+  }
+
+  /** Is this wall contact deliberate? (SPEC §4.3: grab vs. slide) */
+  private shouldGrab(n: THREE.Vector3, input: InputSnapshot): boolean {
+    const s = this.state;
+    if (s.restickTimer > 0) return false;
+    // Mid-swing (or mid-pull) you never grab: you scrape along and keep swinging
+    if (anyAttached(s) || (s.pull.kind === 'attached' && !s.pull.holding)) return false;
+    const speed = this.vPre.length();
+    if (speed < 0.5) return true;
+    if (input.down.sprint && speed >= WALL.wallRunMinSpeed) return true; // deliberate wall-run
+    const headOn = -this.vPre.dot(n) / speed;
+    if (headOn >= WALL.grabApproachCos) return true;
+    return input.down.forward && this.wish.dot(n) < -0.5; // pushing into the wall = grab
+  }
+
+  /** Glancing / mid-swing contact: keep the along-wall motion with a little friction. */
+  private scrape(n: THREE.Vector3, dt: number): void {
+    const s = this.state;
+    const vn = s.vel.dot(n);
+    const tangent = this.t2.copy(s.vel).addScaledVector(n, -vn);
+    tangent.multiplyScalar(Math.max(0, 1 - WALL.slideFriction * dt));
+    s.vel.copy(tangent).addScaledVector(n, Math.max(0, vn));
+    s.scrapeTimer -= dt;
+    const speed = tangent.length();
+    if (speed > 4 && s.scrapeTimer <= 0) {
+      s.scrapeTimer = WALL.scrapeSoundInterval;
+      s.events.push({ type: 'wallScrape', speed });
     }
   }
 

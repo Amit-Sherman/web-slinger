@@ -189,6 +189,9 @@ export class Sfx {
       case 'pullRelease':
         this.tone({ dur: 0.06, gain: 0.15, type: 'triangle', f0: 900, f1: 1600, pan: 0.6 });
         break;
+      case 'wallScrape': // gritty brush against the facade
+        this.burst({ dur: 0.14, gain: Math.min(0.22, 0.05 + e.speed / 200), type: 'bandpass', f0: 900, f1: 500, q: 0.8 });
+        break;
       case 'splash':
         this.burst({ dur: 0.6, gain: 0.4, type: 'lowpass', f0: 3000, f1: 200 });
         break;

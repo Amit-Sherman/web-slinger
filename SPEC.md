@@ -158,8 +158,24 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - **Wall-run:** when moving fast into a wall with Shift held, run along or up it for a
   limited time/distance.
 - **Wall-crawl:** stick to any wall and crawl in any direction (WASD relative to wall).
-  **[BUILT-DEFAULT]** You stick automatically when you touch a wall in the air, or when
-  you walk into a wall on the ground while holding W. Crawl 6 m/s (10 with Shift). Crawling
+- **[DECIDED] Grab vs. slide:** only *deliberate* wall contacts stick. This was changed after
+  playtest, because accidental hits mid-swing used to stop you dead.
+  - **While any line is attached** (swing lines, or a reeling pull line), walls never grab you.
+    You **scrape along the facade**: the into-wall part of your velocity is removed, the
+    along-wall part is kept with light friction (0.4/s), the line keeps swinging you, and a scrape
+    sound plays.
+  - **With no line attached**, you stick only if one of these is true:
+    - the approach is **head-on**: the into-wall share of your velocity is ≥ 0.6, i.e. within
+      ~53° of perpendicular;
+    - you **hold W into the wall**;
+    - you're almost still (< 0.5 m/s);
+    - you **hold Shift at ≥ 12 m/s** (a deliberate wall-run).
+    Glancing contacts slide.
+  - On the ground, walking into a wall while holding W still starts a climb.
+  - Head-on slams faster than 28 m/s with no line still **stagger** (unchanged).
+  - Headless checks: swinging glancing → slides at 22 m/s; swinging head-on → slides; no line
+    glancing → slides; head-on → grabs; 35 m/s head-on → stagger; glancing + W → grabs;
+    glancing + Shift → wall-run at ~20 m/s; swinging + Shift → still slides. Crawl 6 m/s (10 with Shift). Crawling
   up past the top edge mantles you onto the roof. S while touching the ground steps off.
 - **[BUILT-DEFAULT] Wall-run details:** on contact with Shift held and speed ≥ 12 m/s, the
   into-wall speed converts to upward speed (×0.8), with 25% gravity, for up to 1.6 s, then crawl.
@@ -595,3 +611,4 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | M2: movable street props, rooftop props, parked cars | User choice (all three) |
 | 2026-11-22 | M2: web balls knock + glue + splat decals + splat anchors | User choice (all four) |
 | 2026-11-22 | Pull line: two-body physics, catch ≤250 kg, release to throw | Heavy things pull you, by real physics |
+| 2026-11-22 | Walls only grab on deliberate contact; mid-swing hits scrape along | Bug: accidental hits mid-swing stopped you as if climbing |
