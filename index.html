@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lineweaver</title>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <div id="hud">
+      <div id="crosshair"><div class="ring"></div><span id="crosshair-dist"></span></div>
+      <div class="gauge left" id="gauge-left" data-state="idle">
+        <div class="hand">L</div>
+        <div class="body"><div class="state">IDLE</div><div class="bar"><div class="fill"></div></div></div>
+        <div class="len">--</div>
+      </div>
+      <div class="gauge right" id="gauge-right" data-state="idle">
+        <div class="len">--</div>
+        <div class="body"><div class="state">IDLE</div><div class="bar"><div class="fill"></div></div></div>
+        <div class="hand">R</div>
+      </div>
+      <div id="hud-extra"></div>
+      <div class="scanlines"></div>
+    </div>
+
+    <div id="start" class="overlay">
+      <div class="panel">
+        <h1>LINEWEAVER</h1>
+        <p class="tag">Two hands. Two lines. One city.</p>
+        <p id="start-hint" class="hint">Loading…</p>
+        <p class="small">LMB / RMB fire left / right lines · Q / E reel in · Shift+Q / Shift+E let out · Esc pause</p>
+      </div>
+    </div>
+
+    <div id="pause" class="overlay" style="display: none">
+      <div class="panel wide">
+        <h2>PAUSED</h2>
+        <div class="tabs">
+          <button id="resume" class="primary">Resume</button>
+          <button data-tab="controls" class="active">Controls</button>
+          <button data-tab="settings">Settings</button>
+        </div>
+        <div id="tab-controls" class="tab-panel"><div id="controls-list"></div></div>
+        <div id="tab-settings" class="tab-panel" style="display: none"><div id="settings-form"></div></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

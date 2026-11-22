@@ -1,0 +1,84 @@
+/* Visor-styled UI (SPEC §12): thin cyan lines, slight glow, scanlines, monospace numbers. */
+:root {
+  --cyan: #5ff4ff;
+  --cyan-dim: rgba(95, 244, 255, 0.35);
+  --orange: #f08a24;
+  --ink: #0d1a1c;
+  --panel: rgba(10, 22, 26, 0.82);
+  --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: #dff; font-family: system-ui, sans-serif; }
+canvas#game { display: block; width: 100vw; height: 100vh; }
+
+#hud { position: fixed; inset: 0; pointer-events: none; display: none; }
+#hud .scanlines {
+  position: absolute; inset: 0; opacity: 0.06;
+  background: repeating-linear-gradient(0deg, #fff 0 1px, transparent 1px 3px);
+}
+
+#crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+#crosshair .ring {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 1.5px solid var(--cyan-dim); box-shadow: 0 0 6px var(--cyan-dim);
+  transition: background 0.08s, border-color 0.08s;
+}
+#crosshair.lock .ring { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 10px var(--cyan); transform: scale(0.6); }
+#crosshair-dist {
+  position: absolute; left: 22px; top: 1px; font: 11px var(--mono); color: var(--cyan); text-shadow: 0 0 4px var(--cyan-dim);
+}
+
+.gauge {
+  position: absolute; bottom: 28px; display: flex; align-items: center; gap: 10px;
+  font: 12px var(--mono); color: var(--cyan); text-shadow: 0 0 4px var(--cyan-dim);
+}
+.gauge.left { left: 32px; }
+.gauge.right { right: 32px; }
+.gauge .hand { font-size: 18px; font-weight: 700; width: 18px; text-align: center; }
+.gauge .body { width: 160px; }
+.gauge .state { font-size: 10px; letter-spacing: 0.15em; opacity: 0.8; margin-bottom: 4px; }
+.gauge.right .state { text-align: right; }
+.gauge .bar { height: 4px; border: 1px solid var(--cyan-dim); }
+.gauge .fill { height: 100%; width: 0; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); transition: width 0.05s linear; }
+.gauge.right .bar { transform: scaleX(-1); }
+.gauge .len { width: 52px; font-size: 13px; }
+.gauge.right .len { text-align: right; }
+.gauge[data-state='idle'] { opacity: 0.45; }
+.gauge[data-state='firing'] .state, .gauge[data-state='missed'] .state { color: var(--orange); }
+
+#hud-extra { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); font: 11px var(--mono); color: var(--cyan-dim); display: none; }
+
+.overlay {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(8, 20, 24, 0.35), rgba(8, 20, 24, 0.75));
+}
+#start { cursor: pointer; }
+#start.loading { cursor: progress; pointer-events: none; }
+.panel {
+  background: var(--panel); border: 1px solid var(--cyan-dim); padding: 32px 40px; max-width: 92vw;
+  box-shadow: 0 0 24px rgba(95, 244, 255, 0.12); text-align: center;
+}
+.panel.wide { width: 620px; text-align: left; }
+h1 { margin: 0; font: 700 44px var(--mono); letter-spacing: 0.25em; color: var(--cyan); text-shadow: 0 0 12px var(--cyan-dim); }
+h2 { margin: 0 0 16px; font: 700 20px var(--mono); letter-spacing: 0.3em; color: var(--cyan); }
+.tag { margin: 8px 0 24px; color: #f6c78f; letter-spacing: 0.08em; }
+.hint { font: 700 16px var(--mono); color: #fff; letter-spacing: 0.1em; animation: pulse 1.6s infinite; }
+.small { font-size: 12px; opacity: 0.7; margin-top: 20px; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+button {
+  font: 13px var(--mono); padding: 8px 14px; background: transparent; color: var(--cyan);
+  border: 1px solid var(--cyan-dim); cursor: pointer;
+}
+button.active, button:hover { background: rgba(95, 244, 255, 0.12); }
+button.primary { background: var(--cyan); color: var(--ink); font-weight: 700; }
+.row { display: flex; align-items: center; gap: 12px; padding: 6px 0; font-size: 14px; border-bottom: 1px solid rgba(95, 244, 255, 0.08); }
+.row > span { flex: 1; }
+kbd { font: 12px var(--mono); color: var(--cyan); min-width: 170px; }
+input[type='range'] { width: 180px; accent-color: var(--cyan); }
+input[type='checkbox'] { accent-color: var(--cyan); width: 16px; height: 16px; }
+select { font: 13px var(--mono); background: var(--ink); color: var(--cyan); border: 1px solid var(--cyan-dim); padding: 4px; }
+output { font: 12px var(--mono); width: 48px; text-align: right; color: var(--cyan); }
+.note { font-size: 12px; opacity: 0.6; margin-top: 12px; }

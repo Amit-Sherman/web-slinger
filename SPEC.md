@@ -4,7 +4,7 @@
 > about how the game looks, feels and is built. A builder (human or AI) given
 > **only this file** should be able to produce a game that matches it.
 >
-> Status markers: **[DECIDED]** settled · **[PROPOSED]** suggested default, not yet confirmed · **[OPEN]** still being discussed
+> Status markers: **[DECIDED]** settled · **[BUILT-DEFAULT]** chosen while building, works in the game, can still be changed · **[PROPOSED]** suggested, not yet built or confirmed · **[OPEN]** still being discussed
 
 ---
 
@@ -73,10 +73,15 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - **[DECIDED]** The hero's forearms/hands and web-shooters are visible in first person,
   animated when firing, holding and reeling webs. Webs visibly leave each wrist.
   No torso/legs are rendered (looking down shows nothing).
-- **[PROPOSED]** Speed feel: FOV widens with speed (base 85°, up to ~100°), subtle speed
-  lines, wind audio. Optional slight camera roll on hard turns (can be turned off).
-- **[PROPOSED]** Comfort settings: FOV slider, motion-effects toggle, camera-roll toggle,
+- **[BUILT-DEFAULT]** Speed feel: FOV widens with speed (base 85°, +15° between 20 and 60 m/s),
+  radial speed lines above ~30 m/s, wind audio. Camera rolls up to 7° on hard lateral
+  acceleration (can be turned off).
+- **[BUILT-DEFAULT]** Landing feel: the view dips and springs back. Hard landings and wall
+  staggers add trauma-based camera shake.
+- **[BUILT-DEFAULT]** Comfort settings: FOV slider, motion-effects toggle, camera-roll toggle,
   mouse sensitivity, invert-Y.
+- **[BUILT-DEFAULT]** Camera near plane 0.1 m (depth precision for distant rooftops). The
+  forearms sit just beyond it, in the lower screen corners, and swing to point at their line's target.
 
 ### 3.2 Webcam head-tracking (optional, additive)
 - **Off by default**; enabled in Settings. The game is fully playable without a webcam.
@@ -92,7 +97,7 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 
 ---
 
-## 4. Movement & Web-Swinging — [DECIDED core / PROPOSED numbers]
+## 4. Movement & Web-Swinging — [DECIDED core / BUILT-DEFAULT numbers]
 
 ### 4.1 Principles
 - **Physics + assist:** real pendulum physics (gravity, momentum, rope tension), tuned
@@ -107,19 +112,41 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - Hand web states: `idle → firing (travel time) → attached → released`.
 - Each attached web is a **one-sided distance constraint** (a rope: taut when stretched
   to its length, slack when closer). Both webs can be attached at once; both constraints act.
+- **[BUILT-DEFAULT] Rope solver (important for feel):** a **velocity-level** constraint, not
+  position projection. For each taut line, the outward radial velocity is clamped to the
+  line's length rate (−reel-in speed, +let-out speed, or 0), plus a small drift correction
+  capped at 6 m/s. Because the impulses are central, angular momentum is conserved
+  automatically, so reeling a taut line in mid-swing speeds you up with no extra boost.
+  *Do not* convert position corrections into velocity: in the first build that turned a
+  1 m correction into a 60 m/s jolt.
+- **[BUILT-DEFAULT]** At attach, rope length = current distance to the anchor. If you are
+  falling, you drop until it goes taut, then swing.
+- Release assist: +1.5 m/s along velocity (and +1 m/s up if rising) when the *last* line is released.
 - Per-hand **reel in** shortens rope length (pulls you toward the anchor);
   per-hand **let out** lengthens it (drop lower, swing wider).
 - Releasing a hand's button detaches that web; momentum carries on.
-- **[PROPOSED]** numbers (tunable in a config file):
+- **[BUILT-DEFAULT]** numbers (all in `src/config/gameplay.ts`):
   - Max web range: 90 m · web travel speed: 250 m/s
   - Reel-in speed: 12 m/s · let-out speed: 10 m/s · min rope length: 2 m
   - Gravity: 9.81 m/s² × 1.6 (heavier-feeling arcs) · terminal velocity: ~70 m/s
-  - Air control (WASD while airborne): small steering force
+  - Air control (WASD while airborne): 9 m/s² · walk 7 m/s · sprint 13 m/s · jump 9 m/s (sprint jump 11)
+  - Player capsule: radius 0.4 m, total height ~1.9 m; eyes 0.7 m above centre
+- **Headless check (M1 build):** dropping from 12 m below a bridge beam with 12 m/s forward
+  gives a clean pendulum. Rope overshoot ≤ 0.07 m, ~24 m/s at the bottom; reeling a taut
+  line raised speed 19.5 → 27.9 m/s.
 
 ### 4.3 Wall movement
 - **Wall-run:** when moving fast into a wall with Shift held, run along or up it for a
   limited time/distance.
 - **Wall-crawl:** stick to any wall and crawl in any direction (WASD relative to wall).
+  **[BUILT-DEFAULT]** You stick automatically when you touch a wall in the air, or when
+  you walk into a wall on the ground while holding W. Crawl 6 m/s (10 with Shift). Crawling
+  up past the top edge mantles you onto the roof. S while touching the ground steps off.
+- **[BUILT-DEFAULT] Wall-run details:** on contact with Shift held and speed ≥ 12 m/s, the
+  into-wall speed converts to upward speed (×0.8), with 25% gravity, for up to 1.6 s, then crawl.
+  An impact faster than 28 m/s without wall-run → 0.45 s stagger (no control, heavy shake).
+- **[BUILT-DEFAULT]** A taut line pulls you off a wall when it is reeled in or pulls away
+  from the wall. Otherwise lines stay attached while you crawl.
 - **Wall-jump:** Space while on a wall launches you away from it (plus a bit up/forward),
   so you can chain wall-to-wall or wall-to-web.
 - Landing on the ground or rooftops: run, sprint and jump normally.
@@ -160,11 +187,11 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 | Shift + E | Let **right** web out | DECIDED |
 | W A S D | Move / air-steer / crawl on walls | DECIDED |
 | Space | Jump / wall-jump / launch at end of zip | DECIDED |
-| Shift (alone) | Sprint on ground / wall-run | PROPOSED |
+| Shift (alone) | Sprint on ground / wall-run | BUILT-DEFAULT |
 | F | Web-zip | DECIDED |
 | Middle mouse | Web-pull / yank | DECIDED |
 | R | Web-ball shot | DECIDED |
-| Ctrl | Crouch, drop off a wall | DECIDED |
+| Ctrl **or C** | Crouch, drop off a wall | DECIDED (C alias built: browsers can't block Ctrl+W, which closes the tab) |
 | Tab | Reserved (unused in v1) | DECIDED |
 | H | Recenter head-tracking | DECIDED |
 | Esc | Pause / settings | DECIDED |
@@ -178,9 +205,19 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 ## 7. World & City — [DECIDED: procedural]
 
 - Procedurally generated fictional city from a **seed** (same seed = same city).
-- **[PROPOSED]** Layout: a grid-ish street network with some diagonal avenues; districts
-  with distinct height profiles (a downtown of tall skyscrapers, midtown, low-rise
-  residential, an industrial waterfront), a large park, and a river crossed by bridges.
+- **[BUILT-DEFAULT] Layout** (`src/world/cityGen.ts`, default seed 1337, `?seed=` in the URL):
+  - 2 km × 2 km. An irregular grid with blocks 55–105 m and 18 m streets. Diagonal avenues
+    are **[PROPOSED]** for later.
+  - The river is an east–west band 100 m wide (z 410–510), recessed: bed at −4 m, water
+    surface at −0.8 m. Players who fall in swim (4 m/s) and climb out up the embankment walls.
+  - Three suspension-style bridges with tall towers, top cross-beams and decorative cables.
+    The towers are great swing anchors.
+  - Districts by distance from the downtown centre (−150, −180): downtown < 380 m
+    (90–300 m towers with setback tiers and antennas); industrial within 160 m of the river
+    (9–22 m warehouses, plus orange cranes on the quays); midtown < 700 m (40–120 m); residential
+    beyond that (12–35 m, water towers). A park (grass slabs and trees) sits around (180..520, −620..−340).
+  - Lots: 1–3 × 1–3 per block, 0–6 m alleys between buildings, about 6% empty lots outside downtown.
+  - Spawn: the tallest roof near downtown centre.
 - Buildings: varied footprints and heights, rooftop details (water towers, AC units,
   antennas, billboards) that double as web anchors and parkour props.
 - Streets: roads, sidewalks, lamp posts, trees.
@@ -190,7 +227,7 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   and lit building windows turn on. **[PROPOSED]** one full cycle = 20 real minutes, with a
   settings option to freeze the time of day.
 - **[DECIDED]** Fixed, medium-size city generated at load (no chunk streaming in v1).
-  **[PROPOSED]** about 2 km × 2 km.
+  2 km × 2 km (see layout above).
 
 ---
 
@@ -199,8 +236,15 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - **[DECIDED]** Stylized **cel-shaded / comic-book** look: toon shading with stepped
   lighting, bold ink outlines (screen-space edge-detection post-process), flat
   saturated colors.
-- **[PROPOSED]** Halftone-dot shading in shadows, speed lines at high velocity,
-  comic-style impact effects.
+- **[BUILT-DEFAULT] Rendering recipe:** `MeshToonMaterial` with a 3-step ramp (110/185/255),
+  hemisphere light and one sun with shadows. A post pass draws ink where (a) the Laplacian of
+  inverse depth is large (silhouettes, creases; zero on flat planes) or (b) neighbouring
+  luminance differs (fades out by 140 m). Ink fades with fog distance. Building windows come
+  from a tiling mask texture with world-scale UVs (one cell ≈ 3.2–4.8 m × one floor), mixed to
+  blue-grey glass with a faint glint. Lines are drawn after the post pass with correct depth
+  (the post pass writes scene depth), so they glow without being outlined.
+- **[BUILT-DEFAULT]** Speed lines at high velocity (in the post pass).
+- **[PROPOSED]** Halftone-dot shading in shadows, comic-style impact effects.
 - **[DECIDED]** Hero palette: teal, graphite and orange; lines are glowing cyan (§9).
 - **[DECIDED]** City palette, **warm comic city**:
   - Day: sandstone, cream and terracotta buildings; blue-grey glass; light blue sky.
@@ -216,8 +260,9 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - Wind noise rising in volume and pitch with speed.
 - Landings scaled by impact (soft tap → heavy thud), footsteps, wall-run steps, wall-jump.
 - No music and no city ambience in v1 (could come later).
-- **[PROPOSED]** Sources: CC0-licensed sound files bundled in the image, or synthesized
-  with the Web Audio API. Never use copyrighted game/film audio.
+- **[BUILT-DEFAULT]** Every sound is **synthesized with the Web Audio API** (filtered noise
+  bursts and oscillators, `src/audio/sfx.ts`). No audio files, no licensing. Never use
+  copyrighted game or film audio.
 
 ---
 
@@ -291,30 +336,40 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - Graphics presets: **Low / Medium / High**, auto-detected on first launch, changeable in
   settings. Presets scale shadow resolution, draw distance, outline pass resolution,
   traffic/pedestrian density and render resolution scale.
-- **[PROPOSED]** techniques: instanced meshes for repeated props and windows, merged
-  building geometry per city block, frustum culling, distance-based LOD, a single
-  shadow-casting sun with cascaded or tight-fitted shadow maps.
+- **[BUILT-DEFAULT]** techniques: buildings merged into one mesh per 250 m region (frustum
+  culled); props instanced (lamp posts, tanks, trees, cones); windows are a texture, not
+  geometry; one sun shadow map whose frustum follows the player (Low 1024/±90 m,
+  Medium 2048/±140 m, High 4096/±200 m); fog-limited draw distance (1000 / 1600 / 2200 m).
+  Distance-based LOD is **[PROPOSED]** if needed.
 
 ---
 
-## 14. Project Structure & Conventions — [PROPOSED]
+## 14. Project Structure & Conventions — [BUILT-DEFAULT]
 
 ```
 src/
-  main.ts            # bootstrap
-  core/              # game loop (fixed timestep), events, config
-  input/             # action map, keyboard/mouse, (future) gamepad
-  camera/            # first-person camera, head-tracking integration
-  headtracking/      # MediaPipe wrapper, filtering, calibration
-  player/            # character controller, wall movement
-  webs/              # per-hand web state machine, rope constraints, abilities
-  world/             # procedural city generation, chunks, props
-  render/            # toon materials, outline/halftone post-processing
-  audio/
-  ui/                # HUD, menus, settings
-  modes/             # game modes (FreeRoamMode, future modes)
-  config/            # tunable gameplay numbers (one place)
+  main.ts            # bootstrap (physics init, city gen, Game)
+  core/              # game.ts (fixed-timestep loop, wiring), physics.ts (Rapier wrapper), rng.ts
+  input/             # actions.ts (action map + labels), input.ts (per-tick snapshots)
+  camera/            # firstPerson.ts (look, FOV, roll, shake); head-tracking goes here in M3
+  player/            # state.ts (serialisable state + events), controller.ts (movement modes), arms.ts
+  webs/              # lines.ts (per-hand state machine + rope solver), lineVisuals.ts
+  world/             # cityGen.ts (pure data), cityWorld.ts (meshes + colliders), boxGeometry.ts, palette.ts
+  render/            # materials.ts (toon, windows), pipeline.ts (outline/speed-line post), sky.ts
+  audio/             # sfx.ts (Web Audio synthesis)
+  ui/                # hud.ts, menu.ts
+  modes/             # gameMode.ts (GameMode interface, FreeRoamMode)
+  config/            # gameplay.ts (all tunables), settings.ts (presets, persistence)
 ```
+- **Physics model:** Rapier holds static colliders (cuboids, cylinders, balls, cones) and a
+  kinematic character controller for the player capsule (slide, autostep 0.5 m, snap to
+  ground). Gravity, ropes and movement modes are our own code. Rapier only resolves
+  collisions and answers raycasts.
+- **Player modes:** `ground | air | wall | wallrun | swim`. Systems emit `GameEvent`s
+  (fire, attach, miss, release, land, step, jump, wallJump, wallStick, stagger, splash), which
+  drive audio, camera shake and arm recoil. Gameplay never calls audio or rendering directly.
+- Debug: `?shot&cam=x,y,z,yawDeg,pitchDeg` hides the start overlay and places the camera
+  (used for automated screenshots).
 
 - All tunable gameplay numbers live in `src/config/`, never hard-coded in systems.
 
@@ -332,6 +387,9 @@ target, built in later milestones. A milestone ships only when the previous one 
 | M3 | Webcam head-tracking |
 | M4 | Living city: day/night cycle, night lighting, traffic and pedestrians |
 | Later | Game modes (crime, races, collectibles), gamepad, multiplayer, third-person/photo mode |
+
+**Status (2026-11-22):** M1 is built on branch `m1-core-swing`. It passes type-check, builds, and passes the
+headless physics and screenshot checks. It still needs a human playtest against the checks below.
 
 **M1 "swing feel" acceptance checks:**
 - From a rooftop you can cross 1 km of downtown without touching the ground, using only
@@ -376,3 +434,7 @@ target, built in later milestones. A milestone ships only when the previous one 
 | 2026-11-22 | v1 audio = movement SFX only, no music or ambience | |
 | 2026-11-22 | Start straight into the city (click to play), no title or tutorial | Fastest path to swinging |
 | 2026-11-22 | v1 release gate = core swing feel; abilities, head-tracking, living city are M2–M4 | Nail the feel first |
+| 2026-11-22 | M1 built: velocity-level rope solver, attach length = current distance | Position-based projection caused huge speed spikes |
+| 2026-11-22 | C added as alias for Ctrl (crouch/drop) | Ctrl+W closes the browser tab and can't be blocked |
+| 2026-11-22 | All SFX synthesized in Web Audio | No asset licensing, works offline |
+| 2026-11-22 | Recessed river with swimming; suspension bridges as anchors | Gives the waterfront a gameplay purpose |
