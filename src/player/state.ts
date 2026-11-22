@@ -42,8 +42,6 @@ export type GameEvent =
   | { type: 'stagger'; impact: number }
   | { type: 'jump' }
   | { type: 'splash' }
-  | { type: 'webBall'; hand: Hand }
-  | { type: 'splat'; onProp: boolean }
   | { type: 'pullFire' }
   | { type: 'pullAttach' }
   | { type: 'catch' }

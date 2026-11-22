@@ -167,13 +167,6 @@ export class Sfx {
         this.tone({ dur: 0.35, gain: 0.6, type: 'sine', f0: 110, f1: 30 });
         this.burst({ dur: 0.3, gain: 0.5, type: 'lowpass', f0: 2500, f1: 150 });
         break;
-      case 'webBall': // short wet thwip
-        this.burst({ dur: 0.09, gain: 0.35, type: 'bandpass', f0: 2600, f1: 5200, q: 2.5, pan: this.panFor(e.hand) });
-        break;
-      case 'splat':
-        this.burst({ dur: 0.16, gain: 0.3, type: 'lowpass', f0: 1800, f1: 350 });
-        if (e.onProp) this.tone({ dur: 0.12, gain: 0.25, type: 'sine', f0: 220, f1: 90 });
-        break;
       case 'pullFire':
         this.burst({ dur: 0.14, gain: 0.45, type: 'bandpass', f0: 1500, f1: 5500, q: 2, pan: 0.6 });
         break;

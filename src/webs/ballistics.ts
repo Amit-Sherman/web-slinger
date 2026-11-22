@@ -6,18 +6,6 @@ import { LINES } from '../config/gameplay';
 import type { Physics, RayHit } from '../core/physics';
 
 const dir = new THREE.Vector3();
-const segEnd = new THREE.Vector3();
-
-/**
- * Extra anchor targets a stream can snap onto (web-ball splats, SPEC §5.2): given a segment,
- * return the snap hit if one lies within its capture radius, else null.
- */
-export type MagnetQuery = (from: THREE.Vector3, to: THREE.Vector3) => RayHit | null;
-let magnets: MagnetQuery | null = null;
-export function setMagnetQuery(q: MagnetQuery | null): void {
-  magnets = q;
-}
-
 /** Initial stream velocity: along the aim plus part of the player's own velocity. */
 export function launchVelocity(out: THREE.Vector3, aim: THREE.Vector3, playerVel: THREE.Vector3): THREE.Vector3 {
   return out.copy(aim).multiplyScalar(LINES.launchSpeed).addScaledVector(playerVel, LINES.inheritVelocity);
@@ -29,7 +17,6 @@ export function launchVelocity(out: THREE.Vector3, aim: THREE.Vector3, playerVel
  */
 export function stepTip(
   pos: THREE.Vector3, vel: THREE.Vector3, dt: number, physics: Physics, exclude?: RAPIER.Collider,
-  useMagnets = true,
 ): RayHit | null {
   vel.y -= LINES.webGravity * dt;
   dir.copy(vel).multiplyScalar(dt);
@@ -37,11 +24,6 @@ export function stepTip(
   if (len < 1e-6) return null;
   dir.divideScalar(len);
   const hit = physics.raycast(pos, dir, len, exclude);
-  if (magnets && useMagnets) {
-    segEnd.copy(pos).addScaledVector(dir, hit ? hit.distance : len);
-    const snap = magnets(pos, segEnd);
-    if (snap) return snap;
-  }
   if (hit) return hit;
   pos.addScaledVector(dir, len);
   return null;

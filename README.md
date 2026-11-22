@@ -27,6 +27,9 @@ Open **http://localhost:8080** in Chrome, Edge or Firefox and click to play.
 | Space | Jump · wall-jump |
 | Shift | Sprint · wall-run (hold it when you hit a wall fast) |
 | Ctrl or C | Crouch · drop off a wall |
+| Middle mouse (hold) | Pull line: yank light objects into your hands, release to throw · heavy/fixed things yank you |
+| F, then F | Tether: web two things together (props, walls, poles, buildings) |
+| F, then Shift+F | Tie the first end to yourself · F again cuts it |
 | Esc | Pause & settings |
 
 Tips: hold a mouse button to pour a web stream. It has no range limit but drops with gravity, so

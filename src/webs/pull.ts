@@ -1,7 +1,7 @@
 // Pull line (SPEC §5.3), middle mouse: a third web stream from the right launcher.
 // - Hits a light movable prop → reeled in fast (two-body elastic line), caught and held in front
 //   of you; releasing middle mouse throws it along your aim.
-// - Hits something heavy (a car, a glued prop) or static city geometry → the same line yanks
+// - Hits something heavy (a car) or static city geometry → the same line yanks
 //   *you* towards it instead (heavier side moves less, by real physics).
 
 import type RAPIER from '@dimforge/rapier3d-compat';
@@ -64,8 +64,8 @@ export function updatePull(
   const info = props.get(body);
 
   if (l.holding) {
-    if (!body || !info || info.glued) {
-      // Lost it (glued by a web ball, etc.)
+    if (!body || !info) {
+      // Lost it
       l.holding = false;
       body?.setGravityScale(1, true);
       return;
@@ -91,7 +91,7 @@ export function updatePull(
   l.reel = 1;
 
   // Catch light, free props when they reach your hands
-  if (body && info && !info.glued && info.mass <= PULL.maxHoldMass && body.isDynamic()) {
+  if (body && info && info.mass <= PULL.maxHoldMass && body.isDynamic()) {
     const t = body.translation();
     if (tmp.set(t.x, t.y, t.z).distanceTo(eye) < PULL.holdDistance) {
       l.holding = true;

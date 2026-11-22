@@ -14,9 +14,8 @@ import type { RenderPipeline } from '../render/pipeline';
 import { Sky } from '../render/sky';
 import { Hud } from '../ui/hud';
 import type { Menu } from '../ui/menu';
-import { launchVelocity, predictImpact, setMagnetQuery } from '../webs/ballistics';
+import { launchVelocity, predictImpact } from '../webs/ballistics';
 import { Tethers } from '../webs/tethers';
-import { WebBalls } from '../webs/webBalls';
 import { Props } from '../world/props';
 import { LineVisuals } from '../webs/lineVisuals';
 import type { CityData } from '../world/cityGen';
@@ -32,7 +31,6 @@ export class Game {
   private input: Input;
   private player: PlayerController;
   private props: Props;
-  private webBalls: WebBalls;
   private tethers: Tethers;
   private arms: Arms;
   private lineVisuals: LineVisuals;
@@ -69,9 +67,7 @@ export class Game {
     this.props = new Props(city, this.scene, physics);
     this.player = new PlayerController(physics, city, newPlayerState(city.spawn.x, city.spawn.y, city.spawn.z));
     this.player.props = this.props;
-    this.webBalls = new WebBalls(this.scene, physics, this.props);
     this.tethers = new Tethers(this.scene, physics, this.props);
-    setMagnetQuery(this.webBalls.magnet); // web-ball splats act as anchors for streams
     physics.finalize();
     this.props.sleepAll();
     physics.step();
@@ -199,9 +195,7 @@ export class Game {
       while (this.acc >= TICK && steps < PHYSICS.maxStepsPerFrame) {
         const snap = this.input.snapshot();
         this.player.tick(snap, this.cam.aim, this.cam.yaw, TICK);
-        this.webBalls.tick(snap, this.player.eyePosition(this.eye), this.cam.aim, s.vel, this.player.collider, s.events, TICK);
-        this.tethers.tick(s, snap, this.eye, this.cam.aim, this.player.collider, TICK);
-        this.props.tick(TICK);
+        this.tethers.tick(s, snap, this.player.eyePosition(this.eye), this.cam.aim, this.player.collider, TICK);
         this.physics.step();
         this.mode.tick(this.ctx, TICK);
         this.acc -= TICK;
@@ -221,7 +215,6 @@ export class Game {
     const speed = s.vel.length();
     this.cam.update(this.eye, s.vel, this.playing ? dt : 0, this.settings);
     this.props.sync();
-    this.webBalls.render(this.playing ? dt : 0);
     this.arms.update(s.lines, s.pull, this.tethers.shot.kind !== 'idle' ? this.tethers.shot : this.tethers.self, speed, s.mode === 'ground', dt);
     this.arms.wristWorld(0, this.wrists[0]);
     this.arms.wristWorld(1, this.wrists[1]);
@@ -249,7 +242,6 @@ export class Game {
     this.sfx.play(e);
     switch (e.type) {
       case 'fire':
-      case 'webBall':
         this.arms.fired(e.hand);
         break;
       case 'pullFire':

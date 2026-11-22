@@ -91,26 +91,9 @@ export const CAMERA = {
 };
 
 export const PROPS = {
-  glueSpeed: 0.6, // a sticky prop glues once it moves slower than this (m/s)
-  stickySettleTime: 3, // …or after this long, wherever it is
-  glueDuration: 20, // seconds a glued prop stays fixed before it's released
   playerMass: 80, // kg, for two-body rope forces and character pushes
   maxPushForce: 600, // N: walking into props pushes them at most this hard (a car's friction holds)
   climbableMass: 200, // kg: lighter props are pushed when you walk into them, heavier ones can be climbed
-};
-
-// Web balls (SPEC §5.2)
-export const WEB_BALLS = {
-  speed: 90, // m/s along the aim (+ half the player's velocity)
-  cooldown: 0.18, // seconds between shots (hands alternate)
-  impulse: 120, // N·s knock applied to a movable prop on hit
-  maxBalls: 24,
-  maxFlightTime: 4,
-  splatRadius: 0.9, // visual radius (m)
-  anchorRadius: 2.2, // a web stream passing this close to a splat snaps onto it
-  splatLifetime: 30,
-  splatFade: 4,
-  maxSplats: 40,
 };
 
 // Pull line (SPEC §5.3), middle mouse

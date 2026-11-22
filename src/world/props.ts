@@ -1,10 +1,8 @@
 // Movable physics props (SPEC §7.1): street furniture, parked cars, rooftop crates/barrels/AC units.
-// Each prop is a Rapier dynamic body (starts asleep) drawn with instanced meshes. Web balls can
-// glue a prop in place for a while (it becomes a fixed body, then is released again).
+// Each prop is a Rapier dynamic body (starts asleep) drawn with instanced meshes.
 
 import type RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
-import { PROPS } from '../config/gameplay';
 import type { Physics } from '../core/physics';
 import { toon } from '../render/materials';
 import type { CityData, PropKind, PropSpec } from './cityGen';
@@ -88,8 +86,6 @@ interface Prop {
   /** [kindPartIndex] → instance index in that part's mesh */
   instance: number;
   dirty: boolean;
-  sticky: number; // seconds left to settle and glue (0 = not sticky)
-  glued: number; // seconds left glued (0 = not glued)
 }
 
 export class Props {
@@ -103,7 +99,7 @@ export class Props {
   private p = new THREE.Vector3();
   private sc = new THREE.Vector3();
 
-  constructor(city: CityData, scene: THREE.Scene, private physics: Physics) {
+  constructor(city: CityData, scene: THREE.Scene, physics: Physics) {
     const R = physics.R;
     const counts = new Map<PropKind, number>();
     for (const spec of city.props) counts.set(spec.kind, (counts.get(spec.kind) ?? 0) + 1);
@@ -153,7 +149,7 @@ export class Props {
       physics.world.createCollider(shape.setMass(mass).setFriction(def.friction).setRestitution(0.15), body);
       body.sleep(); // attaching a collider wakes the body; props start asleep until disturbed
 
-      const prop: Prop = { spec, body, mass, instance, dirty: true, sticky: 0, glued: 0 };
+      const prop: Prop = { spec, body, mass, instance, dirty: true };
       this.props.push(prop);
       this.byHandle.set(body.handle, prop);
 
@@ -177,45 +173,10 @@ export class Props {
   }
 
   /** Prop info for a body (null for city geometry or the player). */
-  get(body: RAPIER.RigidBody | null): { mass: number; glued: boolean } | null {
+  get(body: RAPIER.RigidBody | null): { mass: number } | null {
     if (!body) return null;
     const p = this.byHandle.get(body.handle);
-    return p ? { mass: p.mass, glued: p.glued > 0 } : null;
-  }
-
-  /** A web ball hit this body: it becomes sticky and glues in place once it settles. */
-  makeSticky(body: RAPIER.RigidBody): void {
-    const p = this.byHandle.get(body.handle);
-    if (!p) return;
-    if (p.glued > 0) {
-      p.glued = PROPS.glueDuration; // refresh
-      return;
-    }
-    p.sticky = PROPS.stickySettleTime;
-  }
-
-  /** Per simulation tick: glue sticky props that have settled, release expired glue. */
-  tick(dt: number): void {
-    const R = this.physics.R;
-    for (const p of this.props) {
-      if (p.sticky > 0) {
-        p.sticky -= dt;
-        const v = p.body.linvel();
-        const settled = Math.hypot(v.x, v.y, v.z) < PROPS.glueSpeed;
-        if (settled || p.sticky <= 0) {
-          p.sticky = 0;
-          p.glued = PROPS.glueDuration;
-          p.body.setBodyType(R.RigidBodyType.Fixed, false);
-          p.dirty = true;
-        }
-      } else if (p.glued > 0) {
-        p.glued -= dt;
-        if (p.glued <= 0) {
-          p.glued = 0;
-          p.body.setBodyType(R.RigidBodyType.Dynamic, true);
-        }
-      }
-    }
+    return p ? { mass: p.mass } : null;
   }
 
   /** Copy body transforms into instance matrices (only for awake / changed props). */

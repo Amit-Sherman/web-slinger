@@ -203,12 +203,13 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 
 1. **Swing (per hand):** fire/hold/release with LMB (left) or RMB (right). Reel per hand (§6).
    Firing is a continuous web stream (§5.1).
-2. **Web balls (R), §5.2:** sticky projectiles. They knock and glue props and leave splats that catch lines.
-3. **Pull line (middle mouse), §5.3:** yank light objects into your hands and throw them, or
+2. **Pull line (middle mouse), §5.3:** yank light objects into your hands and throw them, or
    yank yourself to heavy/fixed things.
+3. **Web tethers (F), §5.4:** web two things together.
 4. **Swinging on props:** swing lines also stick to movable props, with real two-body forces (§5.3).
 
-- **[DECIDED] Dropped:** *web-zip / point launch* (F is unbound). *Dual-web slingshot* is not a
+- **[DECIDED] Dropped:** *web-zip / point launch*. *Web balls* were built, then removed after
+  playtest ("the web ball does nothing"); R is unbound. *Dual-web slingshot* is not a
   separate ability: it emerges from the elastic lines and the existing controls (attach both lines
   ahead, let out or pull back, release).
 
@@ -251,23 +252,7 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - **Audio:** a continuous hiss per hand (stereo-panned) while streaming.
 - All numbers live in `LINES` in `src/config/gameplay.ts`.
 
-### 5.2 Web balls — [DECIDED, built] (key R, hold for auto-fire)
-- Sticky projectiles at 90 m/s along the aim (+50% of player velocity), same web gravity as the
-  stream (they drop). One every 0.18 s while R is held; the hands alternate (wrist flick).
-  At most 24 in flight; they expire after 4 s.
-- **On hit:**
-  - **Splat decal:** a white/cyan web-pattern disc (0.9 m radius) on the surface. It lasts
-    30 s and fades over the last 4 s. At most 40 exist (the oldest is recycled). A splat on a
-    prop moves with the prop.
-  - **Knock:** a movable prop gets a 120 N·s impulse along the ball's direction. That sends a
-    15 kg trash can flying at ~8 m/s, and a car barely moves.
-  - **Glue:** the prop becomes *sticky*. Once it slows below 0.6 m/s (or after 3 s) it is glued:
-    it becomes a fixed body for 20 s, then is released (dynamic again). Another ball refreshes
-    the glue.
-  - **Splat = anchor:** a web stream (swing or pull line, including the HUD prediction) whose
-    path passes within 2.2 m of a splat **snaps onto the splat**. This makes splats reliable
-    anchors you place yourself.
-- Numbers: `WEB_BALLS` in `src/config/gameplay.ts`.
+### 5.2 (removed: web balls, see §5 and the decision log)
 
 ### 5.3 Pull line & two-body lines — [DECIDED, built] (middle mouse, hold)
 - A third web stream (same ballistic stream as §5.1), drawn from the right launcher; the right arm
@@ -276,12 +261,12 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - **Two-body physics (also used by swing lines stuck to props):** a line's pull on the player is
   F = m_player · a (m_player = 80 kg). The prop receives the equal and opposite impulse at the
   anchor point, so the lighter side moves more:
-  - **Light prop** (≤ 250 kg, not glued): it flies to you. Within 2.4 m of your eyes it is
+  - **Light prop** (≤ 250 kg): it flies to you. Within 2.4 m of your eyes it is
     **caught and held**, floating at a camera-local point (0.85 m right, 0.6 m down, 2.6 m
     ahead), driven by velocity with gravity off. HUD: `HOLDING · release middle mouse to throw`.
     **Releasing middle mouse throws it** along the aim at 32·√(30 kg / mass) m/s
     (clamped to 10–45), plus your velocity and a random tumble.
-  - **Heavy prop** (a car, 1200 kg) or **glued prop / static city geometry:** you get yanked
+  - **Heavy prop** (a car, 1200 kg) or **static city geometry:** you get yanked
     towards it. Measured headlessly, pulling a car moved the player 17 m and the car 0.5 m.
   - Releasing middle mouse without holding anything detaches the line (it lingers like any strand).
 - **Swinging from a prop:** a swing line attached to a trash can drags the can (measured: 19.7 m)
@@ -293,7 +278,7 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 ### 5.4 Web tethers — [DECIDED, built] (key F)
 Web two things together. Once joined you **can't control the strand: it just holds**.
 - **F** → a web stream (left launcher, same ballistic stream as §5.1) flies to **end A**: anything
-  (prop, wall, pole, street, a splat). A slack strand then runs from your left hand to A, and the HUD
+  (prop, wall, pole, street). A slack strand then runs from your left hand to A, and the HUD
   shows `TETHER · F: 2nd end · Shift+F: tie to you`.
 - **F again** → a second stream flies to **end B**; A and B are joined by one strand. While B flies,
   A's strand stays drawn from your hand.
@@ -335,7 +320,7 @@ Web two things together. Once joined you **can't control the strand: it just hol
 | F | Tether: 1st end, then 2nd end (web two things together) · F while tied cuts your tether | DECIDED |
 | Shift + F | Tie the waiting 1st end to yourself | DECIDED |
 | Middle mouse (hold) | Pull line: catch & hold light objects, release to throw; yank yourself to heavy/fixed things | DECIDED |
-| R (hold) | Web balls (auto-fire, hands alternate) | DECIDED |
+| R | Unbound (web balls removed) | DECIDED |
 | Ctrl **or C** | Crouch, drop off a wall | DECIDED (C alias built: browsers can't block Ctrl+W, which closes the tab) |
 | Tab | Reserved (unused in v1) | DECIDED |
 | H | Recenter head-tracking | DECIDED |
@@ -535,9 +520,9 @@ src/
   camera/            # firstPerson.ts (look, FOV, roll, shake); head-tracking goes here in M3
   player/            # state.ts (serialisable state + events), controller.ts (movement modes), arms.ts
   webs/              # lines.ts (swing lines + two-body elastic solver), ballistics.ts (stream tip,
-                     # prediction, anchors, splat magnet), pull.ts, webBalls.ts, lineVisuals.ts
+                     # prediction, anchors), pull.ts, tethers.ts, lineVisuals.ts
   world/             # cityGen.ts (pure data incl. prop placement), cityWorld.ts (meshes + colliders),
-                     # props.ts (movable prop bodies + instanced meshes + glue), boxGeometry.ts, palette.ts
+                     # props.ts (movable prop bodies + instanced meshes), boxGeometry.ts, palette.ts
   render/            # materials.ts (toon, windows), pipeline.ts (outline/speed-line post), sky.ts
   audio/             # sfx.ts (Web Audio synthesis)
   ui/                # hud.ts, menu.ts
@@ -553,7 +538,7 @@ src/
     running on the street** (this was present since M1). All big boxes are therefore added as
     **≤ 100 m collider tiles** (`Physics.addCuboidTiled`); the visual mesh stays one piece. Player gravity,
   ropes and movement modes are our own code. Per 60 Hz tick: player tick (lines, pull line,
-  movement, rope forces incl. reactions on props) → web balls → prop glue timers →
+  movement, rope forces incl. reactions on props) → tethers (input, stream, forces) →
   `world.step()` → game mode. Ray hits report the prop body they hit (`RayHit.body`).
 - **Player modes:** `ground | air | wall | wallrun | swim`. Systems emit `GameEvent`s
   (fire, attach, miss, release, land, step, jump, wallJump, wallStick, stagger, splash), which
@@ -575,7 +560,7 @@ target, built in later milestones. A milestone ships only when the previous one 
 | Milestone | Contents |
 |---|---|
 | **M1 = v1 (release gate)** | Docker build, click-to-play, procedural city geometry (buildings, streets, rooftops, cel-shaded with outlines, fixed sun), first-person camera + arms, two independent lines with fire/attach/miss/release, per-hand reel in/out, momentum on release, air control, superhero landings, wall-run / crawl / jump, minimal HUD, pause + settings, movement SFX |
-| M2 (built on `m2-abilities`) | Movable props (street, rooftop, cars) · pull line with catch/hold/throw · web balls (knock, glue, splats that act as anchors) · two-body lines on props. (Zip and slingshot dropped.) |
+| M2 (merged to `main`) | Movable props (street, rooftop, cars) · pull line with catch/hold/throw · two-body lines on props · web tethers (F). (Zip, slingshot and web balls dropped.) |
 | M3 | Webcam head-tracking |
 | M4 | Living city: day/night cycle, night lighting, traffic and pedestrians |
 | Later | Game modes (crime, races, collectibles), gamepad, multiplayer, third-person/photo mode |
@@ -652,3 +637,5 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | Static↔static tether strands are solid (tightrope, anchor) | Makes building-to-building webs useful |
 | 2026-11-22 | Ground colliders tiled ≤100 m | Bug: player sank/stuck when running on the street (since M1) |
 | 2026-11-22 | Light props pushed (≤600 N), heavy props climbable | Walking into a trash can used to climb it |
+| 2026-11-22 | Web balls removed (with prop glue and splat anchors); R unbound | Playtest: "the web ball does nothing" |
+| 2026-11-22 | M2 merged to `main` | User likes it |

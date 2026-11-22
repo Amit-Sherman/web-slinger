@@ -6,7 +6,7 @@ export type Action =
   | 'jump' | 'sprint' | 'crouch'
   | 'fireLeft' | 'fireRight'
   | 'reelLeft' | 'reelRight' | 'modifier'
-  | 'tether' | 'pull' | 'webBall'
+  | 'tether' | 'pull'
   | 'recenterHead' | 'pause';
 
 /** KeyboardEvent.code values, or `Mouse0`/`Mouse1`/`Mouse2` for mouse buttons. */
@@ -27,7 +27,6 @@ export const DEFAULT_BINDINGS: Record<Action, string[]> = {
   modifier: ['ShiftLeft', 'ShiftRight'], // Shift+Q / Shift+E = let line out
   tether: ['KeyF'],
   pull: ['Mouse1'],
-  webBall: ['KeyR'],
   recenterHead: ['KeyH'],
   pause: ['Escape'],
 };
@@ -43,7 +42,6 @@ export const ACTION_LABELS: [string, string][] = [
   ['Shift', 'Sprint · wall-run (hold when hitting a wall fast)'],
   ['Ctrl or C', 'Crouch · drop off a wall'],
   ['Middle mouse (hold)', 'Pull line: yank objects to you (release to throw), or yank yourself to heavy/fixed things'],
-  ['R (hold)', 'Web balls: knock & glue objects, splats catch your lines'],
   ['F, then F', 'Tether: web two things together (props, walls, poles)'],
   ['F, then Shift+F', 'Tether something to yourself · F again cuts it'],
   ['Esc', 'Pause & settings'],
