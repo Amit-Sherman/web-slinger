@@ -46,7 +46,11 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 
 ## 2. Distribution & Running (Docker) — [DECIDED]
 
-- Repo: `github.com/Amit-Sherman/web-slinger` (private; collaborators are invited).
+- Repo: `github.com/Amit-Sherman/web-slinger`, **public, read-only for everyone else**: anyone can
+  view, clone and play. Only the owner can push. Issues, wiki, projects and discussions are disabled.
+  GitHub interaction limits are set to collaborators-only (blocks outside PRs and comments; GitHub caps
+  this at 6 months, renew via Settings → Moderation → Interaction limits). Commits use the owner's
+  GitHub noreply email.
 - A friend runs:
   ```bash
   git clone https://github.com/Amit-Sherman/web-slinger.git
@@ -673,4 +677,5 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | Light props pushed (≤600 N), heavy props climbable | Walking into a trash can used to climb it |
 | 2026-11-22 | Web balls removed (with prop glue and splat anchors); R unbound | Playtest: "the web ball does nothing" |
 | 2026-11-22 | M2 merged to `main` | User likes it |
+| 2026-11-22 | Repo made public, read-only (interaction limits, issues/wiki off); history re-authored to noreply email | Share with everyone without exposing a personal email |
 | 2026-11-22 | M3: MediaPipe Face Landmarker, bundled locally; camera rig + head offset; One-Euro smoothing | SPEC §3.2 as decided; offline Docker requirement |
