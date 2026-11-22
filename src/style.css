@@ -29,6 +29,10 @@ canvas#game { display: block; width: 100vw; height: 100vh; }
   position: absolute; width: 9px; height: 9px; transform: translate(-50%, -50%) rotate(45deg);
   border: 1.5px solid var(--orange); box-shadow: 0 0 6px rgba(240, 138, 36, 0.6); display: none;
 }
+#pull-state {
+  position: absolute; left: 50%; top: calc(50% + 26px); transform: translateX(-50%);
+  font: 11px var(--mono); letter-spacing: 0.12em; color: var(--orange); text-shadow: 0 0 4px rgba(240, 138, 36, 0.5);
+}
 #crosshair-dist {
   position: absolute; left: 22px; top: 1px; font: 11px var(--mono); color: var(--cyan); text-shadow: 0 0 4px var(--cyan-dim);
 }

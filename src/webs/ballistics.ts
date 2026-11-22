@@ -6,6 +6,17 @@ import { LINES } from '../config/gameplay';
 import type { Physics, RayHit } from '../core/physics';
 
 const dir = new THREE.Vector3();
+const segEnd = new THREE.Vector3();
+
+/**
+ * Extra anchor targets a stream can snap onto (web-ball splats, SPEC §5.2): given a segment,
+ * return the snap hit if one lies within its capture radius, else null.
+ */
+export type MagnetQuery = (from: THREE.Vector3, to: THREE.Vector3) => RayHit | null;
+let magnets: MagnetQuery | null = null;
+export function setMagnetQuery(q: MagnetQuery | null): void {
+  magnets = q;
+}
 
 /** Initial stream velocity: along the aim plus part of the player's own velocity. */
 export function launchVelocity(out: THREE.Vector3, aim: THREE.Vector3, playerVel: THREE.Vector3): THREE.Vector3 {
@@ -18,6 +29,7 @@ export function launchVelocity(out: THREE.Vector3, aim: THREE.Vector3, playerVel
  */
 export function stepTip(
   pos: THREE.Vector3, vel: THREE.Vector3, dt: number, physics: Physics, exclude?: RAPIER.Collider,
+  useMagnets = true,
 ): RayHit | null {
   vel.y -= LINES.webGravity * dt;
   dir.copy(vel).multiplyScalar(dt);
@@ -25,6 +37,11 @@ export function stepTip(
   if (len < 1e-6) return null;
   dir.divideScalar(len);
   const hit = physics.raycast(pos, dir, len, exclude);
+  if (magnets && useMagnets) {
+    segEnd.copy(pos).addScaledVector(dir, hit ? hit.distance : len);
+    const snap = magnets(pos, segEnd);
+    if (snap) return snap;
+  }
   if (hit) return hit;
   pos.addScaledVector(dir, len);
   return null;
@@ -45,4 +62,29 @@ export function predictImpact(
     if (hit) return { ...hit, time: t };
   }
   return null;
+}
+
+/** Anchor a line at a hit: static point, or a point that moves with a prop body. */
+export function setAnchor(l: { target: THREE.Vector3; anchorBody: number; anchorLocal: THREE.Vector3 }, hit: RayHit, physics: Physics): void {
+  l.target.copy(hit.point);
+  if (hit.body) {
+    l.anchorBody = hit.body.handle;
+    physics.toLocal(hit.body, hit.point, l.anchorLocal);
+  } else {
+    l.anchorBody = -1;
+  }
+}
+
+/** Move a body-anchored line's target with its body; returns the body (or null if static). */
+export function refreshAnchor(
+  l: { target: THREE.Vector3; anchorBody: number; anchorLocal: THREE.Vector3 }, physics: Physics,
+): RAPIER.RigidBody | null {
+  if (l.anchorBody < 0) return null;
+  const body = physics.world.getRigidBody(l.anchorBody);
+  if (!body) {
+    l.anchorBody = -1;
+    return null;
+  }
+  physics.toWorld(body, l.anchorLocal, l.target);
+  return body;
 }

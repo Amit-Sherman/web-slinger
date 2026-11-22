@@ -30,6 +30,19 @@ export interface PropInstance {
   color: number;
 }
 
+export type PropKind = 'trash' | 'newsbox' | 'cone' | 'bench' | 'car' | 'crate' | 'barrel' | 'ac';
+
+/** A movable physics prop (SPEC §7.1). Position = collider centre; s* scale the kind's base size. */
+export interface PropSpec {
+  kind: PropKind;
+  x: number; y: number; z: number;
+  rotY: number;
+  sx: number; sy: number; sz: number;
+  color: number;
+}
+
+export interface BlockInfo { x0: number; x1: number; z0: number; z1: number; park: boolean }
+
 export interface CityData {
   seed: number;
   halfSize: number;
@@ -40,6 +53,9 @@ export interface CityData {
   foliage: PropInstance[]; // tree crowns (spheres)
   cones: PropInstance[]; // water tower roofs
   cables: [number, number, number, number, number, number][]; // decorative bridge cables
+  props: PropSpec[];
+  blocks: BlockInfo[];
+  roofs: Box[]; // top box of every building (for rooftop props)
   river: { z0: number; z1: number; bedY: number; waterY: number };
   spawn: { x: number; y: number; z: number; yaw: number };
 }
@@ -76,6 +92,9 @@ export function generateCity(seed: number): CityData {
     foliage: [],
     cones: [],
     cables: [],
+    props: [],
+    blocks: [],
+    roofs: [],
     river: { z0: RIVER_Z0, z1: RIVER_Z1, bedY: -4, waterY: -0.8 },
     spawn: { x: 0, y: 50, z: 0, yaw: 0 },
   };
@@ -102,6 +121,7 @@ export function generateCity(seed: number): CityData {
       const cx = (x0 + x1) / 2;
       const cz = (z0 + z1) / 2;
       const isPark = cx > PARK.x0 && cx < PARK.x1 && cz > PARK.z0 && cz < PARK.z1;
+      city.blocks.push({ x0, x1, z0, z1, park: isPark });
       // Sidewalk / park slab
       city.slabs.push(slab(x0, x1, 0, 0.2, z0, z1, isPark ? P.GRASS : P.SIDEWALK));
 
@@ -201,6 +221,8 @@ export function generateCity(seed: number): CityData {
 
   addBridges(rng, city, xBlocks);
   addCranes(rng, city);
+  // Movable props use their own RNG stream so the city layout stays identical for a given seed
+  addMovableProps(new Rng((seed ^ 0x5bd1e995) >>> 0), city);
 
   city.spawn = { x: tallest.x, y: tallest.top + 2, z: tallest.z, yaw: Math.atan2(-(DOWNTOWN.x + 400 - tallest.x), -(DOWNTOWN.z + 400 - tallest.z)) };
   return city;
@@ -208,17 +230,17 @@ export function generateCity(seed: number): CityData {
 
 function addRooftopProps(rng: Rng, city: CityData, top: Box, district: string): void {
   const roofY = top.y + top.hy;
+  city.roofs.push(top);
   const w = top.hx * 2;
   const d = top.hz * 2;
   // AC units
   const acCount = rng.int(0, Math.min(4, Math.floor((w * d) / 150)));
   for (let k = 0; k < acCount; k++) {
     const sx = rng.range(1.5, 3), sz = rng.range(1.5, 3), sy = rng.range(1, 1.8);
-    city.structures.push({
-      x: top.x + rng.range(-top.hx + sx, top.hx - sx), y: roofY + sy / 2,
-      z: top.z + rng.range(-top.hz + sz, top.hz - sz),
-      hx: sx / 2, hy: sy / 2, hz: sz / 2, color: P.AC_UNIT, roofColor: P.AC_UNIT,
-      windows: false, cellW: 4, cellH: 4, collide: true,
+    // Loose AC units are movable props (SPEC §7.1)
+    city.props.push({
+      kind: 'ac', x: top.x + rng.range(-top.hx + sx, top.hx - sx), y: roofY + sy / 2 + 0.01,
+      z: top.z + rng.range(-top.hz + sz, top.hz - sz), rotY: 0, sx, sy, sz, color: P.AC_UNIT,
     });
   }
   // Water towers: on legs, with a cone roof
@@ -289,5 +311,75 @@ function addCranes(rng: Rng, city: CityData): void {
     const armLen = rng.range(25, 40);
     const dir = z < z0 ? 1 : -1;
     city.structures.push({ x, y: h + 1, z: z + dir * (armLen / 2 - 6), hx: 1, hy: 1, hz: armLen / 2, color: P.HERO_ORANGE, roofColor: P.HERO_ORANGE, windows: false, cellW: 4, cellH: 4, collide: true });
+  }
+}
+
+const CAR_COLORS = [0xc8402e, 0x2f5d9e, 0xe8b830, 0xeeeae0, 0x2b2b2e, 0x3e7a4a, 0x8a8f96] as const;
+const NEWSBOX_COLORS = [0x2f5d9e, 0xc8402e, 0x3e7a4a] as const;
+const BARREL_COLORS = [0x9e3b2e, 0x2f5d9e, 0x5f6b3a] as const;
+
+/** Street props on sidewalks, parked cars at curbs, crates/barrels on roofs (SPEC §7.1). */
+function addMovableProps(rng: Rng, city: CityData): void {
+  const push = (p: Omit<PropSpec, 'sx' | 'sy' | 'sz'> & Partial<PropSpec>): void => {
+    city.props.push({ sx: 1, sy: 1, sz: 1, ...p });
+  };
+  for (const b of city.blocks) {
+    const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
+    const nearCentre = Math.hypot(cx - DOWNTOWN.x, cz - DOWNTOWN.z) < 900;
+    const edges: [number, number, number, number, number][] = [
+      // ax, az, bx, bz, outward normal angle (rotY so local +z faces the street)
+      [b.x0, b.z0, b.x1, b.z0, Math.PI], [b.x1, b.z0, b.x1, b.z1, Math.PI / 2],
+      [b.x1, b.z1, b.x0, b.z1, 0], [b.x0, b.z1, b.x0, b.z0, -Math.PI / 2],
+    ];
+    for (const [ax, az, bx, bz, rot] of edges) {
+      const len = Math.hypot(bx - ax, bz - az);
+      const ux = (bx - ax) / len, uz = (bz - az) / len;
+      const nx = Math.sin(rot), nz = Math.cos(rot); // outward (towards the street)
+      // Sidewalk props, 0.9 m inside the curb, kept away from lamp posts
+      if (!b.park) {
+        for (let d = 14; d < len - 10; d += rng.range(30, 50)) {
+          const px = ax + ux * d - nx * 0.9, pz = az + uz * d - nz * 0.9;
+          const roll = rng.next();
+          if (roll < 0.4) push({ kind: 'trash', x: px, y: 0.2 + 0.48, z: pz, rotY: 0, color: 0x3d5a45 });
+          else if (roll < 0.62) push({ kind: 'newsbox', x: px, y: 0.2 + 0.55, z: pz, rotY: rot, color: rng.pick(NEWSBOX_COLORS) });
+          else if (roll < 0.85) push({ kind: 'bench', x: px - nx * 0.3, y: 0.2 + 0.42, z: pz - nz * 0.3, rotY: rot, color: 0x8a5a3a });
+        }
+      } else {
+        for (let d = 20; d < len - 15; d += rng.range(25, 40)) {
+          push({ kind: 'bench', x: ax + ux * d - nx * 2, y: 0.2 + 0.42, z: az + uz * d - nz * 2, rotY: rot, color: 0x8a5a3a });
+        }
+      }
+      // Parked cars in the curb lane, parallel to the street
+      if (nearCentre) {
+        for (let d = 10; d < len - 10; d += 7) {
+          if (!rng.chance(0.07)) continue;
+          push({
+            kind: 'car', x: ax + ux * d + nx * 2.4, y: 0.76, z: az + uz * d + nz * 2.4,
+            rotY: Math.atan2(ux, uz) + (rng.chance(0.5) ? Math.PI : 0), color: rng.pick(CAR_COLORS),
+          });
+          d += 6;
+        }
+      }
+    }
+    // A few traffic cones near some corners
+    if (rng.chance(0.15)) {
+      const k = rng.int(0, 3);
+      const corner = [[b.x0, b.z0, -1, -1], [b.x1, b.z0, 1, -1], [b.x1, b.z1, 1, 1], [b.x0, b.z1, -1, 1]][k];
+      for (let i = 0; i < 3; i++) {
+        push({ kind: 'cone', x: corner[0] + corner[2] * (2 + i * 1.2), y: 0.36, z: corner[1] + corner[3] * 3, rotY: 0, color: 0xf07a24 });
+      }
+    }
+  }
+  // Rooftop crates and barrels
+  for (const top of city.roofs) {
+    if (!rng.chance(0.3) || top.hx < 4 || top.hz < 4) continue;
+    const roofY = top.y + top.hy;
+    const n = rng.int(1, 3);
+    for (let i = 0; i < n; i++) {
+      const x = top.x + rng.range(-top.hx + 1.5, top.hx - 1.5);
+      const z = top.z + rng.range(-top.hz + 1.5, top.hz - 1.5);
+      if (rng.chance(0.55)) push({ kind: 'crate', x, y: roofY + 0.5, z, rotY: rng.range(0, Math.PI), color: 0xa9824f });
+      else push({ kind: 'barrel', x, y: roofY + 0.55, z, rotY: 0, color: rng.pick(BARREL_COLORS) });
+    }
   }
 }

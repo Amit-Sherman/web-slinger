@@ -12,6 +12,7 @@ export class Hud {
   private gauges = [document.getElementById('gauge-left')!, document.getElementById('gauge-right')!];
   private extra = document.getElementById('hud-extra')!;
   private marker = document.getElementById('impact-marker')!;
+  private pullEl = document.getElementById('pull-state')!;
   private v = new THREE.Vector3();
 
   show(visible: boolean): void {
@@ -22,7 +23,10 @@ export class Hud {
   update(
     impact: { point: THREE.Vector3; distance: number } | null, camera: THREE.Camera,
     lines: [LineState, LineState], bodyDist: [number, number], speed: number, altitude: number,
+    pull: LineState,
   ): void {
+    this.pullEl.textContent = pull.holding ? 'HOLDING · release middle mouse to throw'
+      : pull.kind === 'attached' ? 'PULLING' : pull.kind === 'firing' ? 'PULL' : '';
     this.crosshair.classList.toggle('lock', !!impact);
     if (impact) {
       const p = this.v.copy(impact.point).project(camera);

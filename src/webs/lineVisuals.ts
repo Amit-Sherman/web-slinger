@@ -11,7 +11,7 @@ import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LINES } from '../config/gameplay';
-import type { Hand, LineState } from '../player/state';
+import type { LineState } from '../player/state';
 import { LINE_CYAN } from '../world/palette';
 import { launchVelocity } from './ballistics';
 
@@ -165,7 +165,7 @@ function resample(pts: THREE.Vector3[], vels: THREE.Vector3[] | null, n: number)
 }
 
 export class LineVisuals {
-  private hands: [HandVisual, HandVisual];
+  private hands: HandVisual[];
   private strands: Strand[] = [];
   private spare: Strip[] = [];
   private t = 0;
@@ -185,7 +185,7 @@ export class LineVisuals {
         lastKind: 'idle', vibration: 0, lastTension: 0,
       };
     };
-    this.hands = [mk(), mk()];
+    this.hands = [mk(), mk(), mk()]; // left, right, pull line (from the right launcher)
   }
 
   setResolution(w: number, h: number): void {
@@ -198,16 +198,16 @@ export class LineVisuals {
   }
 
   update(
-    lines: [LineState, LineState], nozzles: [THREE.Vector3, THREE.Vector3], body: THREE.Vector3,
+    lines: LineState[], nozzles: THREE.Vector3[], body: THREE.Vector3,
     aim: THREE.Vector3, playerVel: THREE.Vector3, dt: number,
   ): void {
     this.t += dt;
-    for (const hand of [0, 1] as Hand[]) this.updateHand(hand, lines[hand], nozzles[hand], body, aim, playerVel, dt);
+    lines.forEach((l, i) => this.updateHand(i, l, nozzles[i], body, aim, playerVel, dt));
     this.updateStrands(dt);
   }
 
   private updateHand(
-    hand: Hand, l: LineState, nozzle: THREE.Vector3, body: THREE.Vector3,
+    hand: number, l: LineState, nozzle: THREE.Vector3, body: THREE.Vector3,
     aim: THREE.Vector3, playerVel: THREE.Vector3, dt: number,
   ): void {
     const h = this.hands[hand];

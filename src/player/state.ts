@@ -16,6 +16,12 @@ export interface LineState {
   flightTime: number;
   /** Rest length while attached. */
   length: number;
+  /** Rapier handle of the movable prop the line is stuck to (-1 = static city geometry). */
+  anchorBody: number;
+  /** Anchor point in that body's local frame (the anchor moves with the prop). */
+  anchorLocal: THREE.Vector3;
+  /** Pull line only: a light object has been caught and is held in front of you. */
+  holding: boolean;
   /** Constraint correction speed last tick (m/s), drives the taut "twang" visual. */
   tension: number;
   /** -1 letting out, 0 none, 1 reeling in. */
@@ -32,7 +38,14 @@ export type GameEvent =
   | { type: 'wallStick'; impact: number }
   | { type: 'stagger'; impact: number }
   | { type: 'jump' }
-  | { type: 'splash' };
+  | { type: 'splash' }
+  | { type: 'webBall'; hand: Hand }
+  | { type: 'splat'; onProp: boolean }
+  | { type: 'pullFire' }
+  | { type: 'pullAttach' }
+  | { type: 'catch' }
+  | { type: 'throw' }
+  | { type: 'pullRelease' };
 
 export interface PlayerState {
   pos: THREE.Vector3;
@@ -46,13 +59,15 @@ export interface PlayerState {
   slowTimer: number;
   stepDistance: number;
   lines: [LineState, LineState];
+  /** Middle-mouse pull line (SPEC §5.3); visually leaves the right launcher. */
+  pull: LineState;
   events: GameEvent[];
 }
 
 function newLine(): LineState {
   return {
     kind: 'idle', target: new THREE.Vector3(), tipVel: new THREE.Vector3(), flightTime: 0,
-    length: 0, tension: 0, reel: 0,
+    length: 0, tension: 0, reel: 0, anchorBody: -1, anchorLocal: new THREE.Vector3(), holding: false,
   };
 }
 
@@ -69,6 +84,7 @@ export function newPlayerState(x: number, y: number, z: number): PlayerState {
     slowTimer: 0,
     stepDistance: 0,
     lines: [newLine(), newLine()],
+    pull: newLine(),
     events: [],
   };
 }

@@ -167,6 +167,28 @@ export class Sfx {
         this.tone({ dur: 0.35, gain: 0.6, type: 'sine', f0: 110, f1: 30 });
         this.burst({ dur: 0.3, gain: 0.5, type: 'lowpass', f0: 2500, f1: 150 });
         break;
+      case 'webBall': // short wet thwip
+        this.burst({ dur: 0.09, gain: 0.35, type: 'bandpass', f0: 2600, f1: 5200, q: 2.5, pan: this.panFor(e.hand) });
+        break;
+      case 'splat':
+        this.burst({ dur: 0.16, gain: 0.3, type: 'lowpass', f0: 1800, f1: 350 });
+        if (e.onProp) this.tone({ dur: 0.12, gain: 0.25, type: 'sine', f0: 220, f1: 90 });
+        break;
+      case 'pullFire':
+        this.burst({ dur: 0.14, gain: 0.45, type: 'bandpass', f0: 1500, f1: 5500, q: 2, pan: 0.6 });
+        break;
+      case 'pullAttach':
+        this.tone({ dur: 0.08, gain: 0.25, type: 'square', f0: 900, f1: 300, pan: 0.6 });
+        break;
+      case 'catch':
+        this.tone({ dur: 0.12, gain: 0.3, type: 'sine', f0: 260, f1: 120, pan: 0.4 });
+        break;
+      case 'throw':
+        this.burst({ dur: 0.3, gain: 0.35, type: 'bandpass', f0: 500, f1: 1800, q: 1.2, pan: 0.3 });
+        break;
+      case 'pullRelease':
+        this.tone({ dur: 0.06, gain: 0.15, type: 'triangle', f0: 900, f1: 1600, pan: 0.6 });
+        break;
       case 'splash':
         this.burst({ dur: 0.6, gain: 0.4, type: 'lowpass', f0: 3000, f1: 200 });
         break;

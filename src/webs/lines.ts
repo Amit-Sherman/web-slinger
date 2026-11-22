@@ -2,17 +2,18 @@
 // elastic rope.
 
 import * as THREE from 'three';
-import { LINES } from '../config/gameplay';
+import { LINES, PROPS } from '../config/gameplay';
 import type { Physics } from '../core/physics';
 import type { InputSnapshot } from '../input/input';
-import type { Hand, PlayerState } from '../player/state';
+import type { Hand, LineState, PlayerState } from '../player/state';
 import type RAPIER from '@dimforge/rapier3d-compat';
-import { launchVelocity, stepTip } from './ballistics';
+import { launchVelocity, refreshAnchor, setAnchor, stepTip } from './ballistics';
 
 const FIRE: ['fireLeft', 'fireRight'] = ['fireLeft', 'fireRight'];
 const REEL: ['reelLeft', 'reelRight'] = ['reelLeft', 'reelRight'];
 
 const radial = new THREE.Vector3();
+const impulse = new THREE.Vector3();
 
 export function anyAttached(p: PlayerState): boolean {
   return p.lines[0].kind === 'attached' || p.lines[1].kind === 'attached';
@@ -55,13 +56,14 @@ export function updateLines(
         const hit = stepTip(l.target, l.tipVel, dt, physics, self);
         if (hit) {
           l.kind = 'attached';
-          l.target.copy(hit.point);
+          setAnchor(l, hit, physics);
           l.length = THREE.MathUtils.clamp(p.pos.distanceTo(l.target) * LINES.attachLengthFactor, LINES.minLength, LINES.maxLength);
           p.events.push({ type: 'attach', hand });
         }
         break;
       }
       case 'attached':
+        refreshAnchor(l, physics); // follows a prop the line is stuck to
         if (input.down[REEL[hand]]) {
           if (input.down.modifier) {
             l.length = Math.min(LINES.maxLength, l.length + LINES.letOutSpeed * dt);
@@ -87,37 +89,62 @@ function releaseBoost(p: PlayerState, hand: Hand): void {
   if (p.vel.y > 0) p.vel.y += LINES.releaseUpBoost;
 }
 
+export interface LineParams {
+  elasticity: number;
+  dampingRatio: number;
+  maxStretch: number;
+}
+
 /**
- * Elastic lines (SPEC §4.2): each attached line is a one-sided spring-damper. It pulls only when
+ * Elastic lines (SPEC §4.2): an attached line is a one-sided spring-damper. It pulls only when
  * stretched beyond its rest length, never pushes. Stiffness scales with 1/length (like a real
  * elastic cord), so a given load gives the same *percentage* stretch on long and short lines.
  * The forces are central, so angular momentum is conserved and reeling a loaded line in still
- * spins you faster. A hard velocity-level stop at `maxStretch` keeps lines from stretching forever.
+ * spins you faster. A hard velocity-level stop at `maxStretch` keeps lines from stretching forever
+ * (only against static/heavy anchors: a light prop simply gets dragged instead).
+ *
+ * Two-body: if the line is stuck to a movable prop, the prop receives the equal and opposite
+ * impulse (SPEC §5.3), so swinging from a trash can drags it; a car barely moves.
  */
-export function solveRopes(p: PlayerState, dt: number): void {
-  for (const hand of [0, 1] as Hand[]) {
-    const l = p.lines[hand];
-    l.tension = 0;
-    if (l.kind !== 'attached') continue;
-    radial.subVectors(p.pos, l.target);
-    const d = radial.length();
-    if (d <= l.length || d < 1e-4) continue; // slack
-    radial.divideScalar(d);
-    const vr = p.vel.dot(radial); // + = moving away from the anchor
-
-    // Spring-damper pull
-    const k = LINES.elasticity / l.length;
-    const c = 2 * LINES.dampingRatio * Math.sqrt(k);
-    const accel = Math.max(0, k * (d - l.length) + c * vr);
-    p.vel.addScaledVector(radial, -accel * dt);
-    l.tension = accel;
-
-    // Hard stop: never stretch past maxStretch
-    const limit = l.length * (1 + LINES.maxStretch);
-    if (d > limit) {
-      const bias = Math.min(((d - limit) * LINES.driftCorrection) / dt, LINES.maxCorrectionSpeed);
-      const v = p.vel.dot(radial);
-      if (v > -bias) p.vel.addScaledVector(radial, -bias - v);
-    }
+export function solveLine(
+  p: PlayerState, l: LineState, params: LineParams, physics: Physics, dt: number,
+): void {
+  l.tension = 0;
+  if (l.kind !== 'attached' || l.holding) return;
+  const body = l.anchorBody >= 0 ? physics.world.getRigidBody(l.anchorBody) : null;
+  radial.subVectors(p.pos, l.target);
+  const d = radial.length();
+  if (d <= l.length || d < 1e-4) return; // slack
+  radial.divideScalar(d);
+  // Relative radial speed (+ = separating) for damping
+  let vr = p.vel.dot(radial);
+  const movable = !!body && body.isDynamic();
+  if (movable) {
+    const bv = body.linvel();
+    vr -= bv.x * radial.x + bv.y * radial.y + bv.z * radial.z;
   }
+
+  const k = params.elasticity / l.length;
+  const c = 2 * params.dampingRatio * Math.sqrt(k);
+  const accel = Math.max(0, k * (d - l.length) + c * vr);
+  p.vel.addScaledVector(radial, -accel * dt);
+  l.tension = accel;
+
+  if (movable) {
+    // Equal and opposite: F = m_player · a, applied at the anchor towards the player
+    impulse.copy(radial).multiplyScalar(PROPS.playerMass * accel * dt);
+    body.applyImpulseAtPoint({ x: impulse.x, y: impulse.y, z: impulse.z }, { x: l.target.x, y: l.target.y, z: l.target.z }, true);
+    return;
+  }
+
+  const limit = l.length * (1 + params.maxStretch);
+  if (d > limit) {
+    const bias = Math.min(((d - limit) * LINES.driftCorrection) / dt, LINES.maxCorrectionSpeed);
+    const v = p.vel.dot(radial);
+    if (v > -bias) p.vel.addScaledVector(radial, -bias - v);
+  }
+}
+
+export function solveRopes(p: PlayerState, physics: Physics, dt: number): void {
+  for (const hand of [0, 1] as Hand[]) solveLine(p, p.lines[hand], LINES, physics, dt);
 }

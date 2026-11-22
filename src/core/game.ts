@@ -14,7 +14,9 @@ import type { RenderPipeline } from '../render/pipeline';
 import { Sky } from '../render/sky';
 import { Hud } from '../ui/hud';
 import type { Menu } from '../ui/menu';
-import { launchVelocity, predictImpact } from '../webs/ballistics';
+import { launchVelocity, predictImpact, setMagnetQuery } from '../webs/ballistics';
+import { WebBalls } from '../webs/webBalls';
+import { Props } from '../world/props';
 import { LineVisuals } from '../webs/lineVisuals';
 import type { CityData } from '../world/cityGen';
 import { buildCity } from '../world/cityWorld';
@@ -28,6 +30,8 @@ export class Game {
   private sky: Sky;
   private input: Input;
   private player: PlayerController;
+  private props: Props;
+  private webBalls: WebBalls;
   private arms: Arms;
   private lineVisuals: LineVisuals;
   private hud = new Hud();
@@ -60,8 +64,14 @@ export class Game {
     this.sky.applyPreset(preset, this.scene);
 
     buildCity(city, this.scene, physics, preset.anisotropy);
+    this.props = new Props(city, this.scene, physics);
     this.player = new PlayerController(physics, city, newPlayerState(city.spawn.x, city.spawn.y, city.spawn.z));
+    this.player.props = this.props;
+    this.webBalls = new WebBalls(this.scene, physics, this.props);
+    setMagnetQuery(this.webBalls.magnet); // web-ball splats act as anchors for streams
     physics.finalize();
+    this.props.sleepAll();
+    physics.step();
 
     this.arms = new Arms(this.cam.camera);
     this.lineVisuals = new LineVisuals(pipeline.overlayScene);
@@ -183,7 +193,11 @@ export class Game {
       this.acc += dt;
       let steps = 0;
       while (this.acc >= TICK && steps < PHYSICS.maxStepsPerFrame) {
-        this.player.tick(this.input.snapshot(), this.cam.aim, this.cam.yaw, TICK);
+        const snap = this.input.snapshot();
+        this.player.tick(snap, this.cam.aim, this.cam.yaw, TICK);
+        this.webBalls.tick(snap, this.player.eyePosition(this.eye), this.cam.aim, s.vel, this.player.collider, s.events, TICK);
+        this.props.tick(TICK);
+        this.physics.step();
         this.mode.tick(this.ctx, TICK);
         this.acc -= TICK;
         steps++;
@@ -201,17 +215,19 @@ export class Game {
 
     const speed = s.vel.length();
     this.cam.update(this.eye, s.vel, this.playing ? dt : 0, this.settings);
-    this.arms.update(s.lines, speed, s.mode === 'ground', dt);
+    this.props.sync();
+    this.webBalls.render(this.playing ? dt : 0);
+    this.arms.update(s.lines, s.pull, speed, s.mode === 'ground', dt);
     this.arms.wristWorld(0, this.wrists[0]);
     this.arms.wristWorld(1, this.wrists[1]);
-    this.lineVisuals.update(s.lines, this.wrists, this.renderPos, this.cam.aim, s.vel, this.playing ? dt : 0);
+    this.lineVisuals.update([s.lines[0], s.lines[1], s.pull], [this.wrists[0], this.wrists[1], this.wrists[1]], this.renderPos, this.cam.aim, s.vel, this.playing ? dt : 0);
     this.sky.update(this.cam.camera.position, this.renderPos, this.cam.camera.far);
     this.sfx.update(this.playing ? speed : 0, s.lines);
 
     if (this.playing) {
       // Where would a stream fired right now land? (ballistic drop + inherited velocity)
       const impact = predictImpact(this.eye, launchVelocity(this.launchVel, this.cam.aim, s.vel), this.physics, this.player.collider);
-      this.hud.update(impact, this.cam.camera, s.lines, [s.pos.distanceTo(s.lines[0].target), s.pos.distanceTo(s.lines[1].target)], speed, s.pos.y);
+      this.hud.update(impact, this.cam.camera, s.lines, [s.pos.distanceTo(s.lines[0].target), s.pos.distanceTo(s.lines[1].target)], speed, s.pos.y, s.pull);
     }
 
     const speedLines = this.settings.motionEffects ? THREE.MathUtils.clamp((speed - 30) / 35, 0, 1) : 0;
@@ -222,7 +238,11 @@ export class Game {
     this.sfx.play(e);
     switch (e.type) {
       case 'fire':
+      case 'webBall':
         this.arms.fired(e.hand);
+        break;
+      case 'pullFire':
+        this.arms.fired(1);
         break;
       case 'land':
         if (e.impact > LANDING.heavyImpactSpeed) {

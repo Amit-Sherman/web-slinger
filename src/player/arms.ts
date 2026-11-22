@@ -177,11 +177,12 @@ export class Arms {
     this.arms[hand].flick = 1;
   }
 
-  update(lines: [LineState, LineState], speed: number, grounded: boolean, dt: number): void {
+  /** The pull line uses the right arm whenever the right swing line is idle. */
+  update(lines: [LineState, LineState], pull: LineState, speed: number, grounded: boolean, dt: number): void {
     this.bob += dt * (grounded ? Math.min(speed, 13) * 0.9 : 0);
     for (const hand of [0, 1] as Hand[]) {
       const arm = this.arms[hand];
-      const l = lines[hand];
+      const l = hand === 1 && lines[1].kind === 'idle' && pull.kind !== 'idle' ? pull : lines[hand];
       const active = l.kind === 'firing' || l.kind === 'attached';
 
       // Aim the forearm at the line target, clamped to stay in front of the camera
@@ -207,7 +208,8 @@ export class Arms {
 
       // Hand pose: open + wrist flick right after firing, fist while holding a line, relaxed otherwise
       arm.flick = Math.max(0, arm.flick - dt * 5);
-      const targetCurl = arm.flick > 0.4 ? 0 : active ? 1 : 0.3;
+      // Holding a caught object: open hand, as if controlling it through the web
+      const targetCurl = arm.flick > 0.4 ? 0 : l.holding ? 0.15 : active ? 1 : 0.3;
       arm.curl += (targetCurl - arm.curl) * Math.min(1, dt * (targetCurl > arm.curl ? 14 : 9));
       const flick = Math.sin(arm.flick * Math.PI);
       arm.wrist.rotation.x = -0.55 * flick + (active ? 0.12 : 0.05);

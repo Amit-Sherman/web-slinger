@@ -25,7 +25,7 @@ export const DEFAULT_BINDINGS: Record<Action, string[]> = {
   reelLeft: ['KeyQ'],
   reelRight: ['KeyE'],
   modifier: ['ShiftLeft', 'ShiftRight'], // Shift+Q / Shift+E = let line out
-  zip: ['KeyF'],
+  zip: [], // web-zip was dropped from the design; F is free
   pull: ['Mouse1'],
   webBall: ['KeyR'],
   recenterHead: ['KeyH'],
@@ -42,6 +42,7 @@ export const ACTION_LABELS: [string, string][] = [
   ['Space', 'Jump · wall-jump'],
   ['Shift', 'Sprint · wall-run (hold when hitting a wall fast)'],
   ['Ctrl or C', 'Crouch · drop off a wall'],
-  ['F · Middle mouse · R', 'Zip · Pull · Web ball (coming in M2)'],
+  ['Middle mouse (hold)', 'Pull line: yank objects to you (release to throw), or yank yourself to heavy/fixed things'],
+  ['R (hold)', 'Web balls: knock & glue objects, splats catch your lines'],
   ['Esc', 'Pause & settings'],
 ];

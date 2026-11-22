@@ -3,10 +3,12 @@
 
 import type RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
-import { LANDING, PHYSICS, PLAYER, WALL, WATER } from '../config/gameplay';
+import { LANDING, PHYSICS, PLAYER, PROPS, WALL, WATER } from '../config/gameplay';
 import type { Physics } from '../core/physics';
 import type { InputSnapshot } from '../input/input';
 import { anyAttached, solveRopes, updateLines } from '../webs/lines';
+import { solvePull, updatePull } from '../webs/pull';
+import type { Props } from '../world/props';
 import type { CityData } from '../world/cityGen';
 import type { PlayerState } from './state';
 
@@ -14,7 +16,9 @@ const UP = new THREE.Vector3(0, 1, 0);
 
 export class PlayerController {
   readonly collider: RAPIER.Collider;
+  readonly body: RAPIER.RigidBody;
   private cc: RAPIER.KinematicCharacterController;
+  props: Props | null = null;
   private wish = new THREE.Vector3();
   private desired = new THREE.Vector3();
   private vPre = new THREE.Vector3();
@@ -24,16 +28,19 @@ export class PlayerController {
 
   constructor(private physics: Physics, private city: CityData, readonly state: PlayerState) {
     const R = physics.R;
-    this.collider = physics.world.createCollider(
-      R.ColliderDesc.capsule(PLAYER.capsuleHalfHeight, PLAYER.capsuleRadius).setTranslation(state.pos.x, state.pos.y, state.pos.z),
+    // Kinematic body so movable props get pushed properly (SPEC §7.1)
+    this.body = physics.world.createRigidBody(
+      R.RigidBodyDesc.kinematicPositionBased().setTranslation(state.pos.x, state.pos.y, state.pos.z),
     );
+    this.collider = physics.world.createCollider(R.ColliderDesc.capsule(PLAYER.capsuleHalfHeight, PLAYER.capsuleRadius), this.body);
     this.cc = physics.world.createCharacterController(0.03);
     this.cc.setSlideEnabled(true);
     this.cc.setMaxSlopeClimbAngle((50 * Math.PI) / 180);
     this.cc.setMinSlopeSlideAngle((60 * Math.PI) / 180);
     this.cc.enableAutostep(0.5, 0.3, false);
     this.cc.enableSnapToGround(0.4);
-    this.cc.setApplyImpulsesToDynamicBodies(false);
+    this.cc.setApplyImpulsesToDynamicBodies(true);
+    this.cc.setCharacterMass(PROPS.playerMass);
   }
 
   eyePosition(out: THREE.Vector3, pos = this.state.pos): THREE.Vector3 {
@@ -46,8 +53,12 @@ export class PlayerController {
     s.prevPos.copy(s.pos);
     s.vel.set(0, 0, 0);
     s.mode = 'air';
-    for (const l of s.lines) l.kind = 'idle';
-    this.collider.setTranslation({ x, y, z });
+    for (const l of [...s.lines, s.pull]) {
+      l.kind = 'idle';
+      l.holding = false;
+    }
+    this.body.setTranslation({ x, y, z }, true);
+    this.body.setNextKinematicTranslation({ x, y, z });
   }
 
   /** One simulation tick. `aim` is the unit look direction, `yaw` the body heading. */
@@ -59,6 +70,7 @@ export class PlayerController {
     s.slowTimer = Math.max(0, s.slowTimer - dt);
 
     updateLines(s, input, this.eyePosition(this.eye), aim, this.physics, this.collider, dt);
+    if (this.props) updatePull(s, input, this.eye, aim, yaw, this.physics, this.props, this.collider, dt);
 
     // Wish direction from WASD, relative to body yaw (horizontal plane)
     const fwd = (input.down.forward ? 1 : 0) - (input.down.back ? 1 : 0);
@@ -85,7 +97,10 @@ export class PlayerController {
     // Terminal velocity
     if (s.vel.length() > PHYSICS.terminalVelocity) s.vel.setLength(PHYSICS.terminalVelocity);
 
-    if (s.mode !== 'wall' && s.mode !== 'wallrun' && anyAttached(s)) solveRopes(s, dt);
+    if (s.mode !== 'wall' && s.mode !== 'wallrun') {
+      if (anyAttached(s)) solveRopes(s, this.physics, dt);
+      solvePull(s, this.physics, dt);
+    }
     this.desired.copy(s.vel).multiplyScalar(dt);
     if (s.mode === 'wall' || s.mode === 'wallrun') {
       this.desired.addScaledVector(s.wallNormal, -0.5 * dt); // keep contact
@@ -97,7 +112,8 @@ export class PlayerController {
 
   private ropePullsOffWall(): boolean {
     const s = this.state;
-    for (const l of s.lines) {
+    for (const l of [...s.lines, s.pull]) {
+      if (l.holding) continue;
       if (l.kind !== 'attached') continue;
       if (l.reel === 1) return true;
       const toAnchor = this.t1.subVectors(l.target, s.pos);
@@ -227,7 +243,7 @@ export class PlayerController {
     const mv = this.cc.computedMovement();
     const grounded = this.cc.computedGrounded();
     s.pos.x += mv.x; s.pos.y += mv.y; s.pos.z += mv.z;
-    this.collider.setTranslation({ x: s.pos.x, y: s.pos.y, z: s.pos.z });
+    this.body.setNextKinematicTranslation({ x: s.pos.x, y: s.pos.y, z: s.pos.z });
 
     // Velocity follows the (rope-corrected) motion; remove components pushed into obstacles
     s.vel.copy(this.vPre);

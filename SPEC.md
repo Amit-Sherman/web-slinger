@@ -183,14 +183,14 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 
 1. **Swing (per hand):** fire/hold/release with LMB (left) or RMB (right). Reel per hand (§6).
    Firing is a continuous web stream (§5.1).
-2. **Web-zip / point launch:** shoot a web to the targeted point, zip straight to it fast,
-   and launch off it with a boost when you reach it (if you press jump on arrival).
-3. **Dual-web slingshot:** attach both webs to points ahead, let both out / pull back,
-   then release to be catapulted forward. Launch power scales with the stretch.
-4. **Web-pull / yank:** web an object and yank it toward you; or, on heavy/fixed objects,
-   yank yourself to it.
-5. **Web-shooter combat:** fire web balls that stick to surfaces and objects (and future
-   enemies, to trap them). Web up an object and throw it.
+2. **Web balls (R), §5.2:** sticky projectiles. They knock and glue props and leave splats that catch lines.
+3. **Pull line (middle mouse), §5.3:** yank light objects into your hands and throw them, or
+   yank yourself to heavy/fixed things.
+4. **Swinging on props:** swing lines also stick to movable props, with real two-body forces (§5.3).
+
+- **[DECIDED] Dropped:** *web-zip / point launch* (F is unbound). *Dual-web slingshot* is not a
+  separate ability: it emerges from the elastic lines and the existing controls (attach both lines
+  ahead, let out or pull back, release).
 
 ### 5.1 Web stream — [DECIDED, built]
 - **Hold LMB / RMB = a continuous stream of web** pours from that hand's launcher nozzle for as
@@ -231,6 +231,45 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - **Audio:** a continuous hiss per hand (stereo-panned) while streaming.
 - All numbers live in `LINES` in `src/config/gameplay.ts`.
 
+### 5.2 Web balls — [DECIDED, built] (key R, hold for auto-fire)
+- Sticky projectiles at 90 m/s along the aim (+50% of player velocity), same web gravity as the
+  stream (they drop). One every 0.18 s while R is held; the hands alternate (wrist flick).
+  At most 24 in flight; they expire after 4 s.
+- **On hit:**
+  - **Splat decal:** a white/cyan web-pattern disc (0.9 m radius) on the surface. It lasts
+    30 s and fades over the last 4 s. At most 40 exist (the oldest is recycled). A splat on a
+    prop moves with the prop.
+  - **Knock:** a movable prop gets a 120 N·s impulse along the ball's direction. That sends a
+    15 kg trash can flying at ~8 m/s, and a car barely moves.
+  - **Glue:** the prop becomes *sticky*. Once it slows below 0.6 m/s (or after 3 s) it is glued:
+    it becomes a fixed body for 20 s, then is released (dynamic again). Another ball refreshes
+    the glue.
+  - **Splat = anchor:** a web stream (swing or pull line, including the HUD prediction) whose
+    path passes within 2.2 m of a splat **snaps onto the splat**. This makes splats reliable
+    anchors you place yourself.
+- Numbers: `WEB_BALLS` in `src/config/gameplay.ts`.
+
+### 5.3 Pull line & two-body lines — [DECIDED, built] (middle mouse, hold)
+- A third web stream (same ballistic stream as §5.1), drawn from the right launcher; the right arm
+  animates it whenever the right swing line is idle.
+- On attach it **reels in fast** (30 m/s) as a stiff elastic line (elasticity 900, ζ 0.6).
+- **Two-body physics (also used by swing lines stuck to props):** a line's pull on the player is
+  F = m_player · a (m_player = 80 kg). The prop receives the equal and opposite impulse at the
+  anchor point, so the lighter side moves more:
+  - **Light prop** (≤ 250 kg, not glued): it flies to you. Within 2.4 m of your eyes it is
+    **caught and held**, floating at a camera-local point (0.85 m right, 0.6 m down, 2.6 m
+    ahead), driven by velocity with gravity off. HUD: `HOLDING · release middle mouse to throw`.
+    **Releasing middle mouse throws it** along the aim at 32·√(30 kg / mass) m/s
+    (clamped to 10–45), plus your velocity and a random tumble.
+  - **Heavy prop** (a car, 1200 kg) or **glued prop / static city geometry:** you get yanked
+    towards it. Measured headlessly, pulling a car moved the player 17 m and the car 0.5 m.
+  - Releasing middle mouse without holding anything detaches the line (it lingers like any strand).
+- **Swinging from a prop:** a swing line attached to a trash can drags the can (measured: 19.7 m)
+  instead of holding you up. A line on a car is nearly as solid as a wall. Body-anchored lines
+  follow the prop as it moves.
+- A taut or reeling pull line pulls you off walls, like swing lines.
+- Numbers: `PULL` and `PROPS` in `src/config/gameplay.ts`.
+
 ---
 
 ## 6. Controls — Keyboard + Mouse
@@ -247,9 +286,9 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 | W A S D | Move / air-steer / crawl on walls | DECIDED |
 | Space | Jump / wall-jump / launch at end of zip | DECIDED |
 | Shift (alone) | Sprint on ground / wall-run | BUILT-DEFAULT |
-| F | Web-zip | DECIDED |
-| Middle mouse | Web-pull / yank | DECIDED |
-| R | Web-ball shot | DECIDED |
+| F | Unbound (web-zip dropped) | DECIDED |
+| Middle mouse (hold) | Pull line: catch & hold light objects, release to throw; yank yourself to heavy/fixed things | DECIDED |
+| R (hold) | Web balls (auto-fire, hands alternate) | DECIDED |
 | Ctrl **or C** | Crouch, drop off a wall | DECIDED (C alias built: browsers can't block Ctrl+W, which closes the tab) |
 | Tab | Reserved (unused in v1) | DECIDED |
 | H | Recenter head-tracking | DECIDED |
@@ -280,6 +319,30 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - Buildings: varied footprints and heights, rooftop details (water towers, AC units,
   antennas, billboards) that double as web anchors and parkour props.
 - Streets: roads, sidewalks, lamp posts, trees.
+
+### 7.1 Movable props — [DECIDED, built]
+- Every prop is a Rapier **dynamic body**, drawn with instanced meshes (one per kind & part).
+  They start **asleep** and wake when touched, hit, webbed or pushed by the player (the player is
+  a kinematic body whose character controller pushes props with an 80 kg character mass).
+- Placement uses a **separate RNG stream** (`seed ^ 0x5bd1e995`), so adding props never changes
+  the city layout for a seed.
+
+| Kind | Where | Collider · mass |
+|---|---|---|
+| Trash can | sidewalks, 0.9 m inside the curb, every 30–50 m (40% of slots) | cylinder r0.32 h0.96 · 15 kg |
+| Newspaper box | sidewalks (22% of slots), facing the street | box 0.52×1.1×0.48 · 25 kg |
+| Bench | sidewalks (23% of slots), parks every 25–40 m | box 1.8×0.84×0.6 · 40 kg |
+| Traffic cone | 15% of blocks: 3 cones near one corner, in the street | cone r0.2 h0.72 · 3 kg |
+| Parked car | curb lane (2.4 m into the street), parallel, within 900 m of downtown, 7% of 7 m slots | box 1.9×1.44×4.4 · 1200 kg |
+| Crate / barrel | 30% of roofs: 1–3 each | box 1 m · 30 kg / cylinder r0.35 h1.1 · 50 kg |
+| AC unit | roofs (the former static AC boxes) | box ~1.5–3 m · 45 kg/m³ |
+
+- Seed 1337 → ~5,600 props (1,750 AC, 1,160 trash, 780 benches, 640 newsboxes, 550 cars, …).
+- **Performance rule:** attaching a collider wakes a body, and Rapier wakes bodies again on
+  the first step. So props spawn 1 cm above their support, `sleep()` right after creation, and
+  `sleepAll()` + one more step after the world is built. Without this, ~5,000 props simulate for
+  seconds at start (24 ms/step). Steady state with all asleep: ~3.8 ms/step headless (vs ~2 ms
+  with no props). Distance-based enabling was measured (3.3 ms) and judged not worth it.
 - **[DECIDED]** Simple ambient **traffic and pedestrians**: cars follow the road graph,
   pedestrians walk sidewalks. Low-detail, cel-shaded, no complex AI in v1.
 - **[DECIDED]** **Day/night cycle:** the sun moves across the sky; at night, street lamps
@@ -424,18 +487,22 @@ src/
   input/             # actions.ts (action map + labels), input.ts (per-tick snapshots)
   camera/            # firstPerson.ts (look, FOV, roll, shake); head-tracking goes here in M3
   player/            # state.ts (serialisable state + events), controller.ts (movement modes), arms.ts
-  webs/              # lines.ts (per-hand state machine + rope solver), lineVisuals.ts
-  world/             # cityGen.ts (pure data), cityWorld.ts (meshes + colliders), boxGeometry.ts, palette.ts
+  webs/              # lines.ts (swing lines + two-body elastic solver), ballistics.ts (stream tip,
+                     # prediction, anchors, splat magnet), pull.ts, webBalls.ts, lineVisuals.ts
+  world/             # cityGen.ts (pure data incl. prop placement), cityWorld.ts (meshes + colliders),
+                     # props.ts (movable prop bodies + instanced meshes + glue), boxGeometry.ts, palette.ts
   render/            # materials.ts (toon, windows), pipeline.ts (outline/speed-line post), sky.ts
   audio/             # sfx.ts (Web Audio synthesis)
   ui/                # hud.ts, menu.ts
   modes/             # gameMode.ts (GameMode interface, FreeRoamMode)
   config/            # gameplay.ts (all tunables), settings.ts (presets, persistence)
 ```
-- **Physics model:** Rapier holds static colliders (cuboids, cylinders, balls, cones) and a
-  kinematic character controller for the player capsule (slide, autostep 0.5 m, snap to
-  ground). Gravity, ropes and movement modes are our own code. Rapier only resolves
-  collisions and answers raycasts.
+- **Physics model:** Rapier holds static colliders (cuboids, cylinders, balls, cones), the
+  dynamic props (world gravity 9.81) and the player: a **kinematic** body moved by a kinematic
+  character controller (slide, autostep 0.5 m, snap to ground, pushes props). Player gravity,
+  ropes and movement modes are our own code. Per 60 Hz tick: player tick (lines, pull line,
+  movement, rope forces incl. reactions on props) → web balls → prop glue timers →
+  `world.step()` → game mode. Ray hits report the prop body they hit (`RayHit.body`).
 - **Player modes:** `ground | air | wall | wallrun | swim`. Systems emit `GameEvent`s
   (fire, attach, miss, release, land, step, jump, wallJump, wallStick, stagger, splash), which
   drive audio, camera shake and arm recoil. Gameplay never calls audio or rendering directly.
@@ -456,7 +523,7 @@ target, built in later milestones. A milestone ships only when the previous one 
 | Milestone | Contents |
 |---|---|
 | **M1 = v1 (release gate)** | Docker build, click-to-play, procedural city geometry (buildings, streets, rooftops, cel-shaded with outlines, fixed sun), first-person camera + arms, two independent lines with fire/attach/miss/release, per-hand reel in/out, momentum on release, air control, superhero landings, wall-run / crawl / jump, minimal HUD, pause + settings, movement SFX |
-| M2 | Abilities: web-zip/launch, dual-line slingshot, pull/yank, web balls |
+| M2 (built on `m2-abilities`) | Movable props (street, rooftop, cars) · pull line with catch/hold/throw · web balls (knock, glue, splats that act as anchors) · two-body lines on props. (Zip and slingshot dropped.) |
 | M3 | Webcam head-tracking |
 | M4 | Living city: day/night cycle, night lighting, traffic and pedestrians |
 | Later | Game modes (crime, races, collectibles), gamepad, multiplayer, third-person/photo mode |
@@ -524,3 +591,7 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | M1 merged to `main`; M2 started on `m2-abilities` | User loves the swinging |
 | 2026-11-22 | Web launch speed 110 → 150 m/s | Requested: webs should come out faster |
 | 2026-11-22 | Running/air control can't create speed (bleed-only above run speed, air cap) | Bug: unlimited speed by running |
+| 2026-11-22 | M2: drop web-zip and slingshot | User: slingshot already possible with current controls |
+| 2026-11-22 | M2: movable street props, rooftop props, parked cars | User choice (all three) |
+| 2026-11-22 | M2: web balls knock + glue + splat decals + splat anchors | User choice (all four) |
+| 2026-11-22 | Pull line: two-body physics, catch ≤250 kg, release to throw | Heavy things pull you, by real physics |
