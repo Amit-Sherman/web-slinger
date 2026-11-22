@@ -317,6 +317,7 @@ export class PlayerController {
     if (dv > 0) {
       const j = Math.min(body.mass() * dv, PROPS.maxPushForce * dt);
       body.applyImpulse({ x: -n.x * j, y: -n.y * j, z: -n.z * j }, true);
+      this.physics.markDirty();
     }
     return light;
   }

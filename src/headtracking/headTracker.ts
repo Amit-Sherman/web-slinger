@@ -26,11 +26,7 @@ const KEYS = ['yaw', 'pitch', 'roll', 'x', 'y', 'z'] as const;
 const DETECT_INTERVAL_MS = 1000 / 30;
 const CALIBRATION_FRAMES = 10;
 
-// Minimal shape of the MediaPipe landmarker we use (the module is loaded lazily)
-interface Landmarker {
-  detectForVideo(video: HTMLVideoElement, ts: number): { facialTransformationMatrixes?: { data: number[] }[] };
-  close(): void;
-}
+type WorkerMsg = { type: 'ready' } | { type: 'error'; message: string } | { type: 'result'; data: number[] | null };
 
 export class HeadTracker {
   status: TrackerStatus = 'off';
@@ -41,7 +37,9 @@ export class HeadTracker {
   private video: HTMLVideoElement | null = null;
   private videoEl: HTMLVideoElement | null = null; // in the DOM while running
   private stream: MediaStream | null = null;
-  private landmarker: Landmarker | null = null;
+  private worker: Worker | null = null;
+  private workerReady = false;
+  private busy = false; // a frame is being processed in the worker
   private neutral: HeadPose | null = null;
   private calib: HeadPose[] = [];
   private filters = KEYS.map(() => new OneEuroFilter(1.2, 0.08));
@@ -68,23 +66,25 @@ export class HeadTracker {
       this.video = await this.startVideo(stream, gen);
       if (gen !== this.generation) return;
 
-      const vision = await import('@mediapipe/tasks-vision');
-      const fileset = await vision.FilesetResolver.forVisionTasks(`${import.meta.env.BASE_URL}mediapipe/wasm`);
-      const options = (delegate: 'GPU' | 'CPU') => ({
-        baseOptions: { modelAssetPath: `${import.meta.env.BASE_URL}mediapipe/face_landmarker.task`, delegate },
-        runningMode: 'VIDEO' as const,
-        numFaces: 1,
-        outputFacialTransformationMatrixes: true,
-        outputFaceBlendshapes: false,
+      // Face detection runs in a worker so it never stalls rendering (SPEC §3.2.1)
+      const worker = new Worker(new URL('./faceWorker.ts', import.meta.url), { type: 'module' });
+      this.worker = worker;
+      const base = new URL(import.meta.env.BASE_URL, location.href);
+      await new Promise<void>((resolve, reject) => {
+        worker.onmessage = (e: MessageEvent<WorkerMsg>) => {
+          if (e.data.type === 'ready') resolve();
+          else if (e.data.type === 'error') reject(new Error(e.data.message));
+        };
+        worker.onerror = (e) => reject(new Error(e.message || 'head-tracking worker failed to start'));
+        worker.postMessage({
+          type: 'init',
+          wasmBase: new URL('mediapipe/wasm', base).href,
+          modelUrl: new URL('mediapipe/face_landmarker.task', base).href,
+        });
       });
-      let lm: Landmarker;
-      try {
-        lm = await vision.FaceLandmarker.createFromOptions(fileset, options('GPU'));
-      } catch {
-        lm = await vision.FaceLandmarker.createFromOptions(fileset, options('CPU'));
-      }
-      if (gen !== this.generation) return lm.close();
-      this.landmarker = lm;
+      if (gen !== this.generation) return;
+      worker.onmessage = (e: MessageEvent<WorkerMsg>) => this.onWorker(e.data, gen);
+      this.workerReady = true;
       this.recenter();
       this.status = 'no-face';
     } catch (e) {
@@ -143,8 +143,10 @@ export class HeadTracker {
       this.videoEl.remove();
       this.videoEl = null;
     }
-    this.landmarker?.close();
-    this.landmarker = null;
+    this.worker?.postMessage({ type: 'close' });
+    this.worker = null;
+    this.workerReady = false;
+    this.busy = false;
     this.status = 'off';
     Object.assign(this.pose, ZERO);
   }
@@ -156,33 +158,46 @@ export class HeadTracker {
     this.filters.forEach((f) => f.reset());
   }
 
-  /** Call every render frame; detection itself runs at ~30 Hz. */
+  /** Call every render frame: hands a new webcam frame to the worker (~30 Hz) when it's free. */
   update(nowMs: number, dt: number): void {
-    if (!this.landmarker || !this.video) return;
-    if (nowMs - this.lastDetect >= DETECT_INTERVAL_MS && this.video.readyState >= 2 && this.video.currentTime !== this.lastVideoTime) {
+    const video = this.video, worker = this.worker;
+    if (!this.workerReady || !video || !worker) return;
+    if (!this.busy && nowMs - this.lastDetect >= DETECT_INTERVAL_MS && video.readyState >= 2 && video.currentTime !== this.lastVideoTime) {
       this.lastDetect = nowMs;
-      this.lastVideoTime = this.video.currentTime;
-      let raw: HeadPose | null = null;
-      try {
-        const res = this.landmarker.detectForVideo(this.video, nowMs);
-        const mat = res.facialTransformationMatrixes?.[0];
-        if (mat) raw = this.poseFromMatrix(mat.data);
-      } catch (e) {
-        this.status = 'error';
-        this.error = describeError(e);
-        return;
-      }
-      if (raw) {
-        this.status = 'tracking';
-        this.applyRaw(raw, nowMs / 1000);
-        return;
-      }
-      this.status = 'no-face';
+      this.lastVideoTime = video.currentTime;
+      this.busy = true;
+      const gen = this.generation;
+      createImageBitmap(video).then((bitmap) => {
+        if (gen !== this.generation || !this.worker) {
+          bitmap.close();
+          return;
+        }
+        this.worker.postMessage({ type: 'frame', bitmap, ts: nowMs }, [bitmap]);
+      }).catch(() => {
+        this.busy = false;
+      });
     }
     if (this.status === 'no-face') {
       // Ease back to looking straight ahead while the face is lost
       const k = Math.min(1, dt * 3);
       for (const key of KEYS) this.pose[key] -= this.pose[key] * k;
+    }
+  }
+
+  private onWorker(msg: WorkerMsg, gen: number): void {
+    if (gen !== this.generation) return;
+    if (msg.type === 'error') {
+      this.status = 'error';
+      this.error = msg.message;
+      return;
+    }
+    if (msg.type !== 'result') return;
+    this.busy = false;
+    if (msg.data) {
+      this.status = 'tracking';
+      this.applyRaw(this.poseFromMatrix(msg.data), performance.now() / 1000);
+    } else {
+      this.status = 'no-face';
     }
   }
 

@@ -105,6 +105,12 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   `public/mediapipe/wasm/` by `scripts/copy-mediapipe.mjs` (runs as `predev`/`prebuild`; git-ignored).
   The model `public/mediapipe/face_landmarker.task` (float16 v1, 3.7 MB, sha256 `64184e22…`) is
   committed. Everything is served by the game itself, so it **works offline in Docker**.
+- **Worker:** detection runs in a module Web Worker (`src/headtracking/faceWorker.ts`). The main
+  thread grabs a frame with `createImageBitmap(video)` (~30 Hz, only when the worker is free)
+  and transfers it. The worker replies with the face matrix and the pose math stays on the main
+  thread. The worker uses the **module** build of the WASM runtime (`vision_wasm_module_internal.*`,
+  `forVisionTasks(base, true)`), because inside a module worker `importScripts` fails and the
+  library falls back to a dynamic `import()`.
 - **Camera:** `getUserMedia` 640×480 front camera (needs a secure context: `localhost` qualifies).
   The stream plays in a tiny invisible `<video>` that is **attached to the page** (Firefox aborts
   playback of detached video elements with "The fetching process for the media resource was
@@ -112,7 +118,7 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   for the first frame (`loadeddata`) instead of trusting `play()`, retrying up to 5×.
   Errors map to plain messages: permission denied, no camera, camera busy.
   Re-enabling the toggle (or changing any setting) retries after an error.
-  The landmarker runs in `VIDEO` mode at ~30 Hz, GPU delegate with a CPU fallback, 1 face,
+  The landmarker (in the worker) runs in `VIDEO` mode at ~30 Hz, GPU delegate with a CPU fallback, 1 face,
   `outputFacialTransformationMatrixes: true`.
 - **Pose from the face matrix** (camera space, cm; x = image right = the player's LEFT, y up,
   z towards the camera; column- vs row-major is auto-detected by where the large z translation sits):
@@ -546,10 +552,48 @@ Web two things together. Once joined you **can't control the strand: it just hol
   settings. Presets scale shadow resolution, draw distance, outline pass resolution,
   traffic/pedestrian density and render resolution scale.
 - **[BUILT-DEFAULT]** techniques: buildings merged into one mesh per 250 m region (frustum
-  culled); props instanced (lamp posts, tanks, trees, cones); windows are a texture, not
-  geometry; one sun shadow map whose frustum follows the player (Low 1024/±90 m,
-  Medium 2048/±140 m, High 4096/±200 m); fog-limited draw distance (1000 / 1600 / 2200 m).
-  Distance-based LOD is **[PROPOSED]** if needed.
+  culled); windows are a texture, not geometry; one sun shadow map whose frustum follows the
+  player (Low 1024/±90 m, Medium 2048/±140 m, High 4096/±200 m); fog-limited draw distance
+  (1000 / 1600 / 2200 m).
+
+### 13.1 Optimization pass (built; measured with the perf overlay)
+Baseline vs. after, in headless Firefox with software WebGL (absolute numbers are pessimistic;
+the ratios are what matter):
+
+| | Before | After |
+|---|---|---|
+| FPS (vsync-capped at 60) | 31–34 | 56–60 |
+| CPU per frame | 20–22 ms | 4–5.5 ms |
+| Physics | 14–15 ms | ~0 when idle, <1 ms when props move |
+| Triangles per frame | 1.22 M | ~125 k |
+| Head-tracking (main thread) | 3.5 ms avg, 50 ms spikes | 0.45 ms |
+
+What was done, and the rules to keep:
+1. **Static physics as triangle meshes.** Rapier's step costs ~0.36 ms per 1000 colliders even
+   when everything sleeps. All static city shapes (boxes, ≤100 m ground tiles, cylinders, balls,
+   cones) are accumulated and baked into **one trimesh collider per 250 m region** at load
+   (`Physics.finalize`). 10,000 boxes: 3.9 ms/step as boxes vs. 0.05 ms as trimeshes. No
+   `FIX_INTERNAL_EDGES` (our overlapping boxes aren't a clean manifold). All movement tests
+   re-passed, and street running became perfectly level.
+2. **Skip `world.step()` when nothing is awake.** The player is a parentless collider that only
+   needs scene queries. **Pitfall:** Rapier lists a woken body as active only *after* the next
+   step, so every gameplay call that wakes a body (impulses, `setLinvel`, gravity scale, tether
+   forces, pushes) must call `physics.markDirty()`. Adding/removing colliders also marks it dirty.
+3. **Props:** only props within a preset distance (Low 200 / Medium 320 / High 500 m) are packed into
+   the instance buffers (re-packed every 0.25 s or after moving 20 m). Only bodies Rapier reports
+   as awake are re-synced each frame. Lighter meshes (8-segment cylinders and wheels).
+4. **Static instanced items** (lamp posts, trunks, tree crowns, water towers, cones, lamp heads)
+   are split into 250 m chunks, so frustum culling works. Small items are hidden beyond a preset
+   distance (350 / 600 / 900 m). Thin posts and lamp heads cast no shadows.
+5. **Aim prediction:** 1/15 s steps over 3 s (45 raycasts), recomputed every other frame.
+6. **No per-frame garbage** in line/tether visuals (pooled vectors). The **HUD writes the DOM only
+   when a value changes.**
+7. **Auto resolution** (setting, on by default): once a second, if frames average > 18.5 ms the
+   render scale drops by 0.1 (min 0.5); after 3 s under 15 ms it rises by 0.05 up to the user's
+   "Render scale (max)".
+8. **Head-tracking in a Web Worker** (see §3.2.1).
+- **Perf overlay:** press **P** (or `?perf`). It shows FPS, average/worst frame, CPU ms per system
+  (sim, physics, props, visuals, aim+hud, head, render), draw calls, triangles and render scale.
 
 ---
 
@@ -576,7 +620,8 @@ src/
 - **Physics model:** Rapier holds static colliders (cuboids, cylinders, balls, cones), the
   dynamic props (world gravity 9.81) and the player: a **standalone capsule collider** (no rigid
   body) moved by a kinematic character controller (slide, autostep 0.5 m, snap to ground).
-  Prop pushing is our own force-limited code, not Rapier's.
+  Prop pushing is our own force-limited code, not Rapier's. Static geometry is baked into
+  per-region trimeshes, and `world.step()` is skipped while nothing is awake (§13.1).
   - **Pitfall (bug found during M2):** the character controller loses precision against
     *huge* cuboids. The single 2 km street slab made the player sink ~3–20 cm and **get stuck when
     running on the street** (this was present since M1). All big boxes are therefore added as
@@ -685,5 +730,6 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | M2 merged to `main` | User likes it |
 | 2026-11-22 | Repo made public, read-only (interaction limits, issues/wiki off); history re-authored to noreply email | Share with everyone without exposing a personal email |
 | 2026-11-22 | M3 merged to `main` | Head-tracking confirmed working with a real webcam |
+| 2026-11-22 | Optimization pass: trimesh statics, idle-step skip, prop/static culling, worker head-tracking, auto resolution | User: low FPS + stutters; ~4× less CPU, ~10× fewer triangles |
 | 2026-11-22 | Webcam video element attached to the page, wait-for-frames + retries | Bug: Firefox aborted playback of the detached video |
 | 2026-11-22 | M3: MediaPipe Face Landmarker, bundled locally; camera rig + head offset; One-Euro smoothing | SPEC §3.2 as decided; offline Docker requirement |

@@ -28,7 +28,7 @@ interface KindDef {
 }
 
 const box = (w: number, h: number, d: number): THREE.BufferGeometry => new THREE.BoxGeometry(w, h, d);
-const cyl = (r: number, h: number, seg = 12): THREE.BufferGeometry => new THREE.CylinderGeometry(r, r, h, seg);
+const cyl = (r: number, h: number, seg = 8): THREE.BufferGeometry => new THREE.CylinderGeometry(r, r, h, seg);
 
 const KINDS: Record<PropKind, KindDef> = {
   trash: {
@@ -58,10 +58,10 @@ const KINDS: Record<PropKind, KindDef> = {
     parts: [
       { geo: box(1.9, 0.75, 4.4), pos: [0, -0.1, 0] },
       { geo: box(1.7, 0.6, 2.3), pos: [0, 0.55, -0.2], color: 0x3a4a58 },
-      { geo: cyl(0.36, 0.26, 14), pos: [0.85, -0.38, 1.35], rotZ: Math.PI / 2, color: 0x1e1e20 },
-      { geo: cyl(0.36, 0.26, 14), pos: [-0.85, -0.38, 1.35], rotZ: Math.PI / 2, color: 0x1e1e20 },
-      { geo: cyl(0.36, 0.26, 14), pos: [0.85, -0.38, -1.35], rotZ: Math.PI / 2, color: 0x1e1e20 },
-      { geo: cyl(0.36, 0.26, 14), pos: [-0.85, -0.38, -1.35], rotZ: Math.PI / 2, color: 0x1e1e20 },
+      { geo: cyl(0.36, 0.26, 8), pos: [0.85, -0.38, 1.35], rotZ: Math.PI / 2, color: 0x1e1e20 },
+      { geo: cyl(0.36, 0.26, 8), pos: [-0.85, -0.38, 1.35], rotZ: Math.PI / 2, color: 0x1e1e20 },
+      { geo: cyl(0.36, 0.26, 8), pos: [0.85, -0.38, -1.35], rotZ: Math.PI / 2, color: 0x1e1e20 },
+      { geo: cyl(0.36, 0.26, 8), pos: [-0.85, -0.38, -1.35], rotZ: Math.PI / 2, color: 0x1e1e20 },
     ],
   },
   crate: {
@@ -83,35 +83,41 @@ interface Prop {
   spec: PropSpec;
   body: RAPIER.RigidBody;
   mass: number;
-  /** [kindPartIndex] → instance index in that part's mesh */
-  instance: number;
-  dirty: boolean;
+  /** Body transform (incl. per-instance scale) and position, cached: sleeping props never change. */
+  matrix: THREE.Matrix4;
+  pos: THREE.Vector3;
+  /** Instance slot in its kind's meshes while within draw distance, else -1. */
+  slot: number;
 }
 
 export class Props {
   private props: Prop[] = [];
+  private byKind = new Map<PropKind, Prop[]>();
   private byHandle = new Map<number, Prop>();
   private meshes = new Map<PropKind, THREE.InstancedMesh[]>();
   private partMatrices = new Map<PropKind, THREE.Matrix4[]>();
   private m = new THREE.Matrix4();
-  private bodyM = new THREE.Matrix4();
   private q = new THREE.Quaternion();
-  private p = new THREE.Vector3();
   private sc = new THREE.Vector3();
+  private color = new THREE.Color();
+  private lastRefreshPos = new THREE.Vector3(Infinity, 0, 0);
+  private refreshTimer = 0;
+  /** Only props within this distance of the camera are drawn (SPEC §13). */
+  drawDistance = 320;
 
-  constructor(city: CityData, scene: THREE.Scene, physics: Physics) {
+  constructor(city: CityData, scene: THREE.Scene, private physics: Physics) {
     const R = physics.R;
     const counts = new Map<PropKind, number>();
     for (const spec of city.props) counts.set(spec.kind, (counts.get(spec.kind) ?? 0) + 1);
 
     // Instanced meshes per kind & part
-    const color = new THREE.Color();
     for (const [kind, n] of counts) {
       const def = KINDS[kind];
       const meshes = def.parts.map((part) => {
         const mesh = new THREE.InstancedMesh(part.geo, toon(), n);
         mesh.castShadow = mesh.receiveShadow = true;
-        mesh.frustumCulled = false; // instances move; the merged bounds would go stale
+        mesh.frustumCulled = false; // only nearby instances are packed in (see refresh); bounds would go stale
+        mesh.count = 0;
         scene.add(mesh);
         return mesh;
       });
@@ -123,11 +129,8 @@ export class Props {
       )));
     }
 
-    const next = new Map<PropKind, number>();
     for (const spec of city.props) {
       const def = KINDS[spec.kind];
-      const instance = next.get(spec.kind) ?? 0;
-      next.set(spec.kind, instance + 1);
       const [a, b, c] = def.size;
       const volumeScale = spec.sx * spec.sy * spec.sz;
       const mass = spec.kind === 'ac' ? def.mass * volumeScale : def.mass;
@@ -149,15 +152,53 @@ export class Props {
       physics.world.createCollider(shape.setMass(mass).setFriction(def.friction).setRestitution(0.15), body);
       body.sleep(); // attaching a collider wakes the body; props start asleep until disturbed
 
-      const prop: Prop = { spec, body, mass, instance, dirty: true };
+      const prop: Prop = { spec, body, mass, matrix: new THREE.Matrix4(), pos: new THREE.Vector3(), slot: -1 };
+      this.updateMatrix(prop);
       this.props.push(prop);
       this.byHandle.set(body.handle, prop);
-
-      const meshes = this.meshes.get(spec.kind)!;
-      def.parts.forEach((part, j) => meshes[j].setColorAt(instance, color.setHex(part.color ?? spec.color)));
+      const list = this.byKind.get(spec.kind) ?? [];
+      list.push(prop);
+      this.byKind.set(spec.kind, list);
     }
-    for (const meshes of this.meshes.values()) for (const mesh of meshes) if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    this.sync(true);
+  }
+
+  private updateMatrix(p: Prop): void {
+    const t = p.body.translation();
+    const r = p.body.rotation();
+    const s = p.spec.kind === 'ac' ? this.sc.set(p.spec.sx, p.spec.sy, p.spec.sz) : this.sc.set(1, 1, 1);
+    p.pos.set(t.x, t.y, t.z);
+    p.matrix.compose(p.pos, this.q.set(r.x, r.y, r.z, r.w), s);
+  }
+
+  private writeSlot(p: Prop, meshes: THREE.InstancedMesh[], parts: THREE.Matrix4[]): void {
+    for (let j = 0; j < meshes.length; j++) meshes[j].setMatrixAt(p.slot, this.m.multiplyMatrices(p.matrix, parts[j]));
+  }
+
+  /** Pack the props within draw distance into the instance buffers (runs a few times a second). */
+  private refresh(cam: THREE.Vector3): void {
+    const r2 = this.drawDistance * this.drawDistance;
+    for (const [kind, list] of this.byKind) {
+      const meshes = this.meshes.get(kind)!;
+      const parts = this.partMatrices.get(kind)!;
+      const def = KINDS[kind];
+      let n = 0;
+      for (const p of list) {
+        const dx = p.pos.x - cam.x, dz = p.pos.z - cam.z;
+        if (dx * dx + dz * dz > r2) {
+          p.slot = -1;
+          continue;
+        }
+        p.slot = n++;
+        this.writeSlot(p, meshes, parts);
+        def.parts.forEach((part, j) => meshes[j].setColorAt(p.slot, this.color.setHex(part.color ?? p.spec.color)));
+      }
+      for (const mesh of meshes) {
+        mesh.count = n;
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      }
+    }
+    this.lastRefreshPos.copy(cam);
   }
 
   /**
@@ -179,24 +220,26 @@ export class Props {
     return p ? { mass: p.mass } : null;
   }
 
-  /** Copy body transforms into instance matrices (only for awake / changed props). */
-  sync(all = false): void {
-    const touched = new Set<THREE.InstancedMesh>();
-    for (const p of this.props) {
-      const awake = !p.body.isSleeping() && !p.body.isFixed();
-      if (!all && !awake && !p.dirty) continue;
-      p.dirty = awake; // one more update after falling asleep
-      const t = p.body.translation();
-      const r = p.body.rotation();
-      const s = p.spec.kind === 'ac' ? this.sc.set(p.spec.sx, p.spec.sy, p.spec.sz) : this.sc.set(1, 1, 1);
-      this.bodyM.compose(this.p.set(t.x, t.y, t.z), this.q.set(r.x, r.y, r.z, r.w), s);
-      const meshes = this.meshes.get(p.spec.kind)!;
-      const parts = this.partMatrices.get(p.spec.kind)!;
-      for (let j = 0; j < meshes.length; j++) {
-        meshes[j].setMatrixAt(p.instance, this.m.multiplyMatrices(this.bodyM, parts[j]));
-        touched.add(meshes[j]);
-      }
+  /**
+   * Per render frame: re-pack nearby props every 0.25 s (or after moving 20 m), and update only
+   * the props Rapier reports as awake. Sleeping props cost nothing.
+   */
+  sync(cam: THREE.Vector3, dt: number): void {
+    this.refreshTimer -= dt;
+    if (this.refreshTimer <= 0 || cam.distanceToSquared(this.lastRefreshPos) > 400) {
+      this.refreshTimer = 0.25;
+      this.refresh(cam);
     }
+    const touched = new Set<THREE.InstancedMesh>();
+    this.physics.world.forEachActiveRigidBody((b) => {
+      const p = this.byHandle.get(b.handle);
+      if (!p) return;
+      this.updateMatrix(p);
+      if (p.slot < 0) return;
+      const meshes = this.meshes.get(p.spec.kind)!;
+      this.writeSlot(p, meshes, this.partMatrices.get(p.spec.kind)!);
+      for (const mesh of meshes) touched.add(mesh);
+    });
     for (const mesh of touched) mesh.instanceMatrix.needsUpdate = true;
   }
 }

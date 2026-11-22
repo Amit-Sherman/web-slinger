@@ -70,8 +70,10 @@ interface HandVisual {
   splatT: number;
   pulse: number;
   particles: Particle[]; // oldest first
-  points: THREE.Vector3[]; // what was drawn last frame (for release / blend)
+  points: THREE.Vector3[]; // what was drawn last frame (for release / blend), views into pool
   vels: THREE.Vector3[]; // matching velocities (for release)
+  pool: THREE.Vector3[]; // reused every frame (no per-frame allocation → no GC hitches)
+  vpool: THREE.Vector3[];
   blendFrom: THREE.Vector3[] | null;
   blendT: number;
   lastKind: LineState['kind'];
@@ -181,7 +183,7 @@ export class LineVisuals {
       scene.add(tip, flash, splat);
       return {
         strip: makeStrip(scene), tip, flash, splat, flashT: 0, splatT: 0, pulse: 0,
-        particles: [], points: [], vels: [], blendFrom: null, blendT: 0,
+        particles: [], points: [], vels: [], pool: [], vpool: [], blendFrom: null, blendT: 0,
         lastKind: 'idle', vibration: 0, lastTension: 0,
       };
     };
@@ -264,16 +266,17 @@ export class LineVisuals {
         const half = Math.floor(h.particles.length / 2);
         h.particles = h.particles.filter((_, i) => i >= half || i % 2 === 0);
       }
-      const pts = [nozzle.clone()];
-      const vels = [launchVelocity(new THREE.Vector3(), aim, playerVel)];
-      for (let i = h.particles.length - 1; i >= 0; i--) {
-        pts.push(h.particles[i].p.clone());
-        vels.push(h.particles[i].v.clone());
+      this.take(h, h.particles.length + 2);
+      const pts = h.points, vels = h.vels;
+      pts[0].copy(nozzle);
+      launchVelocity(vels[0], aim, playerVel);
+      let k = 1;
+      for (let i = h.particles.length - 1; i >= 0; i--, k++) {
+        pts[k].copy(h.particles[i].p);
+        vels[k].copy(h.particles[i].v);
       }
-      pts.push(l.target.clone());
-      vels.push(l.tipVel.clone());
-      h.points = pts;
-      h.vels = vels;
+      pts[k].copy(l.target);
+      vels[k].copy(l.tipVel);
       // Streams are brighter and thicker than attached lines, with pulses flowing outward
       setStrip(h.strip, pts, 1, 1.35, 0.75);
       h.strip.core.computeLineDistances();
@@ -294,10 +297,11 @@ export class LineVisuals {
     h.vibration = Math.max(0, h.vibration - dt * 3);
 
     const len = nozzle.distanceTo(l.target);
-    const pts: THREE.Vector3[] = [];
+    this.take(h, ROPE_POINTS);
+    const pts = h.points;
     for (let i = 0; i < ROPE_POINTS; i++) {
       const t = i / (ROPE_POINTS - 1);
-      const p = nozzle.clone().lerp(l.target, t);
+      const p = pts[i].copy(nozzle).lerp(l.target, t);
       const env = 4 * t * (1 - t);
       p.y -= sag * env;
       if (h.vibration > 0) {
@@ -305,7 +309,6 @@ export class LineVisuals {
         p.x += Math.sin(t * 18 + this.t * 70) * amp;
         p.y += Math.cos(t * 15 + this.t * 63) * amp;
       }
-      pts.push(p);
     }
     if (h.blendFrom && h.blendT > 0) {
       h.blendT = Math.max(0, h.blendT - dt);
@@ -314,10 +317,23 @@ export class LineVisuals {
       pts.forEach((p, i) => p.lerpVectors(from[i], p, k));
       if (h.blendT === 0) h.blendFrom = null;
     }
-    h.points = pts;
     // Hand end moves with the player, anchor end is still
-    h.vels = pts.map((_, i) => playerVel.clone().multiplyScalar(1 - i / (ROPE_POINTS - 1)));
+    for (let i = 0; i < ROPE_POINTS; i++) h.vels[i].copy(playerVel).multiplyScalar(1 - i / (ROPE_POINTS - 1));
     setStrip(h.strip, pts, 1, thin);
+  }
+
+  /** Point h.points/h.vels at the first n pooled vectors (grows the pool once, then reuses). */
+  private take(h: HandVisual, n: number): void {
+    while (h.pool.length < n) {
+      h.pool.push(new THREE.Vector3());
+      h.vpool.push(new THREE.Vector3());
+    }
+    h.points.length = 0;
+    h.vels.length = 0;
+    for (let i = 0; i < n; i++) {
+      h.points.push(h.pool[i]);
+      h.vels.push(h.vpool[i]);
+    }
   }
 
   /** Muzzle flash at the nozzle and catch splat at the anchor, both short fades. */

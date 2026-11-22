@@ -27,7 +27,7 @@ export const LINES = {
   launchSpeed: 150, // m/s along the aim (raised from 110 after playtest)
   webGravity: 9.81, // web strands are light: normal gravity, not the player's heavier 1.6×
   inheritVelocity: 0.5, // fraction of the player's velocity the stream inherits
-  predictionTime: 4, // seconds of trajectory the HUD impact marker looks ahead
+  predictionTime: 3, // seconds of trajectory the HUD impact marker looks ahead
   maxFlightTime: 30, // stop testing for hits after this (the stream keeps flowing visually)
   reelInSpeed: 13.2,
   letOutSpeed: 11,

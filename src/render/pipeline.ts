@@ -90,6 +90,7 @@ export class RenderPipeline {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.setPixelRatio(1);
+    this.renderer.info.autoReset = false; // counted per frame across all passes (perf overlay)
 
     this.target = new THREE.WebGLRenderTarget(1, 1, {
       type: THREE.HalfFloatType,

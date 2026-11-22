@@ -38,7 +38,8 @@ export function predictImpact(
 ): (RayHit & { time: number }) | null {
   pPos.copy(origin);
   pVel.copy(vel);
-  const dt = 1 / 30;
+  // Coarse steps are plenty for a HUD marker (each step is one raycast)
+  const dt = 1 / 15;
   for (let t = 0; t < LINES.predictionTime; t += dt) {
     const hit = stepTip(pPos, pVel, dt, physics, exclude);
     if (hit) return { ...hit, time: t };

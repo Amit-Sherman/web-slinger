@@ -134,6 +134,7 @@ export function solveLine(
     // Equal and opposite: F = m_player · a, applied at the anchor towards the player
     impulse.copy(radial).multiplyScalar(PROPS.playerMass * accel * dt);
     body.applyImpulseAtPoint({ x: impulse.x, y: impulse.y, z: impulse.z }, { x: l.target.x, y: l.target.y, z: l.target.z }, true);
+    physics.markDirty();
     return;
   }
 

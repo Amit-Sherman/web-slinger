@@ -20,7 +20,8 @@ import { Tethers } from '../webs/tethers';
 import { Props } from '../world/props';
 import { LineVisuals } from '../webs/lineVisuals';
 import type { CityData } from '../world/cityGen';
-import { buildCity } from '../world/cityWorld';
+import { buildCity, type CityCull } from '../world/cityWorld';
+import { Perf } from './perf';
 import type { Physics } from './physics';
 
 const TICK = 1 / PHYSICS.tickRate;
@@ -32,10 +33,12 @@ export class Game {
   private input: Input;
   private player: PlayerController;
   private props: Props;
+  private cityCull: CityCull;
   private tethers: Tethers;
   private arms: Arms;
   private lineVisuals: LineVisuals;
   private hud = new Hud();
+  readonly perf = new Perf();
   private head = new HeadTracker();
   private aimPoint = new THREE.Vector3();
   private sfx = new Sfx();
@@ -45,11 +48,20 @@ export class Game {
   private acc = 0;
   private last = 0;
   private time = 0;
+  /** Auto resolution (SPEC §13): effective scale = min(user render scale, dynScale). */
+  private dynScale = 1;
+  private dynTimer = 0;
+  private dynFrames = 0;
+  private dynMs = 0;
+  private dynGood = 0;
   /** Debug only: slow-motion factor for automated frame captures. */
   debugTimeScale = 1;
   private renderPos = new THREE.Vector3();
   private eye = new THREE.Vector3();
   private launchVel = new THREE.Vector3();
+  private impact: ReturnType<typeof predictImpact> = null;
+  private predictFrame = 0;
+  private playingPredicted = false;
   private wrists: [THREE.Vector3, THREE.Vector3] = [new THREE.Vector3(), new THREE.Vector3()];
 
   constructor(
@@ -66,7 +78,7 @@ export class Game {
     this.sky = new Sky(this.scene);
     this.sky.applyPreset(preset, this.scene);
 
-    buildCity(city, this.scene, physics, preset.anisotropy);
+    this.cityCull = buildCity(city, this.scene, physics, preset.anisotropy);
     this.props = new Props(city, this.scene, physics);
     this.player = new PlayerController(physics, city, newPlayerState(city.spawn.x, city.spawn.y, city.spawn.z));
     this.player.props = this.props;
@@ -195,14 +207,49 @@ export class Game {
     const preset = PRESETS[s.preset];
     this.sky.applyPreset(preset, this.scene);
     this.cam.camera.far = preset.drawDistance * 1.2;
-    this.pipeline.setSize(window.innerWidth, window.innerHeight, s.renderScale);
+    this.dynScale = s.renderScale;
+    this.applyScale();
     this.sfx.setVolume(s.masterVolume, s.sfxVolume);
+    this.props.drawDistance = preset.propDistance;
+    this.cityCull?.setDistance(preset.smallPropDistance);
     saveSettings(s);
+  }
+
+  private applyScale(): void {
+    const scale = this.settings.autoResolution ? Math.min(this.settings.renderScale, this.dynScale) : this.settings.renderScale;
+    this.pipeline.setSize(window.innerWidth, window.innerHeight, scale);
+  }
+
+  /**
+   * Auto resolution: once a second, if frames averaged slower than ~54 fps, drop the render scale
+   * by 0.1 (min 0.5); after 3 good seconds (< 15 ms) creep back up by 0.05 towards the user's max.
+   */
+  private autoResolution(realMs: number): void {
+    if (!this.settings.autoResolution || !this.playing) return;
+    this.dynFrames++;
+    this.dynMs += realMs;
+    this.dynTimer += realMs;
+    if (this.dynTimer < 1000) return;
+    const avg = this.dynMs / this.dynFrames;
+    this.dynTimer = this.dynFrames = this.dynMs = 0;
+    const max = this.settings.renderScale;
+    let next = this.dynScale;
+    if (avg > 18.5) {
+      next = Math.max(0.5, this.dynScale - 0.1);
+      this.dynGood = 0;
+    } else if (avg < 15 && ++this.dynGood >= 3) {
+      next = Math.min(max, this.dynScale + 0.05);
+      this.dynGood = 0;
+    }
+    if (Math.abs(next - this.dynScale) > 1e-3) {
+      this.dynScale = next;
+      this.applyScale();
+    }
   }
 
   private resize(): void {
     const w = window.innerWidth, h = window.innerHeight;
-    this.pipeline.setSize(w, h, this.settings.renderScale);
+    this.applyScale();
     this.cam.camera.aspect = w / h;
     this.cam.camera.updateProjectionMatrix();
     this.lineVisuals.setResolution(w, h);
@@ -210,8 +257,11 @@ export class Game {
   }
 
   private frame(now: number): void {
-    const dt = Math.min(0.1, (now - this.last) / 1000) * this.debugTimeScale;
+    const realMs = now - this.last;
+    const dt = Math.min(0.1, realMs / 1000) * this.debugTimeScale;
     this.last = now;
+    const perf = this.perf;
+    perf.begin('cpu total');
     const s = this.player.state;
 
     if (this.playing) {
@@ -220,16 +270,20 @@ export class Game {
       this.cam.look(dx, dy, this.settings);
       this.acc += dt;
       let steps = 0;
+      perf.begin('sim');
       while (this.acc >= TICK && steps < PHYSICS.maxStepsPerFrame) {
         const snap = this.input.snapshot();
         this.player.tick(snap, this.cam.aim, this.cam.yaw, TICK);
         this.tethers.tick(s, snap, this.player.eyePosition(this.eye), this.cam.aim, this.player.collider, TICK);
+        perf.begin('  physics');
         this.physics.step();
+        perf.end('  physics');
         this.mode.tick(this.ctx, TICK);
         this.acc -= TICK;
         steps++;
       }
       if (steps === PHYSICS.maxStepsPerFrame) this.acc = 0;
+      perf.end('sim');
     }
 
     // Interpolate between the last two sim states for smooth rendering
@@ -241,10 +295,16 @@ export class Game {
     s.events.length = 0;
 
     const speed = s.vel.length();
+    perf.begin('head');
     this.head.update(now, dt);
+    perf.end('head');
     if (this.playing && this.input.consumeRecenter()) this.head.recenter();
     this.cam.update(this.eye, s.vel, this.playing ? dt : 0, this.settings, this.head.pose);
-    this.props.sync();
+    perf.begin('props');
+    this.props.sync(this.cam.worldPosition, dt);
+    this.cityCull.update(this.cam.worldPosition);
+    perf.end('props');
+    perf.begin('visuals');
     this.arms.update(s.lines, s.pull, this.tethers.shot.kind !== 'idle' ? this.tethers.shot : this.tethers.self, speed, s.mode === 'ground', dt);
     this.arms.wristWorld(0, this.wrists[0]);
     this.arms.wristWorld(1, this.wrists[1]);
@@ -257,17 +317,39 @@ export class Game {
     this.tethers.render(this.wrists[0], this.playing ? dt : 0);
     this.sky.update(this.cam.worldPosition, this.renderPos, this.cam.camera.far);
     this.sfx.update(this.playing ? speed : 0, s.lines);
+    perf.end('visuals');
 
     if (this.playing) {
+      perf.begin('aim+hud');
       // Where would a stream fired right now land? (ballistic drop + inherited velocity)
-      const impact = predictImpact(this.eye, launchVelocity(this.launchVel, this.cam.aim, s.vel), this.physics, this.player.collider);
+      // (recomputed every other frame: 45 raycasts; the marker doesn't need more)
+      if ((this.predictFrame = (this.predictFrame + 1) % 2) === 0 || !this.playingPredicted) {
+        this.impact = predictImpact(this.eye, launchVelocity(this.launchVel, this.cam.aim, s.vel), this.physics, this.player.collider);
+        this.playingPredicted = true;
+      }
+      const impact = this.impact;
       // Aim follows the mouse only; with head-tracking the crosshair drifts to where the aim points
       this.aimPoint.copy(this.cam.rig.position).addScaledVector(this.cam.aim, 60);
       this.hud.update(impact, this.cam.camera, s.lines, [s.pos.distanceTo(s.lines[0].target), s.pos.distanceTo(s.lines[1].target)], speed, s.pos.y, s.pull, this.tethers.status, this.aimPoint, this.headStatus());
+      perf.end('aim+hud');
     }
 
     const speedLines = this.settings.motionEffects ? THREE.MathUtils.clamp((speed - 30) / 35, 0, 1) : 0;
+    perf.begin('render');
     this.pipeline.render(this.scene, this.cam.camera, PRESETS[this.settings.preset].drawDistance, speedLines, this.time);
+    perf.end('render');
+    perf.end('cpu total');
+    if (perf.enabled) {
+      const info = this.pipeline.renderer.info;
+      perf.extra = {
+        'draws': info.render.calls,
+        'tris': `${(info.render.triangles / 1000).toFixed(0)}k`,
+        'scale': this.pipeline.scale.toFixed(2),
+      };
+    }
+    this.pipeline.renderer.info.reset();
+    this.autoResolution(realMs);
+    perf.frame(realMs, now);
   }
 
   private handleEvent(e: GameEvent): void {

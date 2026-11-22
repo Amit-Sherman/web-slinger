@@ -11,7 +11,8 @@ type Field =
 
 const FIELDS: Field[] = [
   { key: 'preset', label: 'Graphics preset', kind: 'preset' },
-  { key: 'renderScale', label: 'Render scale', kind: 'range', min: 0.5, max: 1, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+  { key: 'autoResolution', label: 'Auto resolution (keeps FPS up)', kind: 'check' },
+  { key: 'renderScale', label: 'Render scale (max)', kind: 'range', min: 0.5, max: 1, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
   { key: 'fov', label: 'Field of view', kind: 'range', min: 70, max: 110, step: 1, fmt: (v) => `${v}°` },
   { key: 'sensitivity', label: 'Mouse sensitivity', kind: 'range', min: 0.2, max: 3, step: 0.05, fmt: (v) => v.toFixed(2) },
   { key: 'invertY', label: 'Invert Y', kind: 'check' },

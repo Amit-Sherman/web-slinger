@@ -40,7 +40,10 @@ export function updatePull(
 
   if (!input.down.pull && l.kind !== 'idle') {
     const body = l.anchorBody >= 0 ? physics.world.getRigidBody(l.anchorBody) : null;
-    if (l.holding && body) throwHeld(body, props, aim, p.vel);
+    if (l.holding && body) {
+      throwHeld(body, props, aim, p.vel);
+      physics.markDirty();
+    }
     p.events.push({ type: l.holding ? 'throw' : 'pullRelease' });
     l.kind = 'idle';
     l.holding = false;
@@ -68,6 +71,7 @@ export function updatePull(
       // Lost it
       l.holding = false;
       body?.setGravityScale(1, true);
+      physics.markDirty();
       return;
     }
     // Drive the held object to a point in front of the right hand
@@ -82,6 +86,7 @@ export function updatePull(
     body.setLinvel({ x: tmp.x, y: tmp.y, z: tmp.z }, true);
     const av = body.angvel();
     body.setAngvel({ x: av.x * 0.8, y: av.y * 0.8, z: av.z * 0.8 }, true);
+    physics.markDirty();
     l.target.set(t.x, t.y, t.z);
     return;
   }
@@ -96,6 +101,7 @@ export function updatePull(
     if (tmp.set(t.x, t.y, t.z).distanceTo(eye) < PULL.holdDistance) {
       l.holding = true;
       body.setGravityScale(0, true);
+      physics.markDirty();
       p.events.push({ type: 'catch' });
     }
   }

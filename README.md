@@ -37,6 +37,12 @@ aim at the orange diamond (where the web will land), not the crosshair, for long
 to swing. Let go near the bottom of the arc for
 speed, or near the top for height. Alternate hands for rhythm. Walk into any wall to climb it.
 
+## Performance
+
+Press **P** in game for a performance overlay (FPS, frame time per system, draw calls). Settings has
+graphics presets, a max render scale and **Auto resolution** (on by default), which lowers the
+resolution a bit whenever the frame rate drops.
+
 ## Webcam head-tracking (optional)
 
 Esc → Settings → **Webcam head-tracking**. Allow camera access when the browser asks. Turn your

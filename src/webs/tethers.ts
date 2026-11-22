@@ -57,6 +57,7 @@ export class Tethers {
   private fading: Tether[] = [];
   private pendingStrip: Strip;
   private resolution = new THREE.Vector2(1, 1);
+  private ptsPool = Array.from({ length: POINTS }, () => new THREE.Vector3());
 
   constructor(private scene: THREE.Scene, private physics: Physics, private props: Props) {
     this.pendingStrip = makeStrip(scene);
@@ -155,6 +156,7 @@ export class Tethers {
       const mid = tmp.addVectors(ea.target, eb.target).multiplyScalar(0.5);
       n.subVectors(eb.target, ea.target).normalize();
       const q = new THREE.Quaternion().setFromUnitVectors(UP, n);
+      this.physics.markDirty();
       collider = this.physics.world.createCollider(
         R.ColliderDesc.capsule(rest / 2, TETHER.strandRadius)
           .setTranslation(mid.x, mid.y, mid.z)
@@ -170,7 +172,10 @@ export class Tethers {
 
   private remove(t: Tether): void {
     this.tethers.splice(this.tethers.indexOf(t), 1);
-    if (t.collider) this.physics.world.removeCollider(t.collider, false);
+    if (t.collider) {
+      this.physics.world.removeCollider(t.collider, false);
+      this.physics.markDirty();
+    }
     t.fade = TETHER.fadeTime;
     this.fading.push(t);
   }
@@ -201,6 +206,7 @@ export class Tethers {
     const imp = f * dt;
     if (ma < Infinity) ba!.applyImpulseAtPoint({ x: n.x * imp, y: n.y * imp, z: n.z * imp }, t.a.target, true);
     if (mb < Infinity) bb!.applyImpulseAtPoint({ x: -n.x * imp, y: -n.y * imp, z: -n.z * imp }, t.b.target, true);
+    if (imp > 0) this.physics.markDirty();
   }
 
   /** Render frame: draw joined strands (sag when slack, thin when stretched), the waiting strand, fades. */
@@ -230,12 +236,10 @@ export class Tethers {
     const slack = Math.max(0, rest - d);
     const sag = Math.min(Math.sqrt(slack * rest) * 0.5, d * 0.4);
     const strain = Math.max(0, (d - rest) / rest);
-    const pts: THREE.Vector3[] = [];
+    const pts = this.ptsPool;
     for (let i = 0; i < POINTS; i++) {
       const t = i / (POINTS - 1);
-      const p = a.clone().lerp(b, t);
-      p.y -= sag * 4 * t * (1 - t);
-      pts.push(p);
+      pts[i].copy(a).lerp(b, t).y -= sag * 4 * t * (1 - t);
     }
     setStrip(strip, pts, opacity * 0.95, 0.85 * (1 - Math.min(0.55, strain * 3)));
   }

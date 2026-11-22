@@ -15,6 +15,7 @@ export interface Settings {
   headTracking: boolean;
   headGain: number;
   headParallax: number;
+  autoResolution: boolean;
 }
 
 export interface PresetValues {
@@ -23,12 +24,16 @@ export interface PresetValues {
   drawDistance: number;
   renderScale: number;
   anisotropy: number;
+  /** Movable props are drawn within this distance. */
+  propDistance: number;
+  /** Small static props (lamp posts, trees) are drawn within this distance. */
+  smallPropDistance: number;
 }
 
 export const PRESETS: Record<GraphicsPreset, PresetValues> = {
-  low: { shadowMapSize: 1024, shadowExtent: 90, drawDistance: 1000, renderScale: 0.75, anisotropy: 1 },
-  medium: { shadowMapSize: 2048, shadowExtent: 140, drawDistance: 1600, renderScale: 1, anisotropy: 4 },
-  high: { shadowMapSize: 4096, shadowExtent: 200, drawDistance: 2200, renderScale: 1, anisotropy: 8 },
+  low: { shadowMapSize: 1024, shadowExtent: 90, drawDistance: 1000, renderScale: 0.75, anisotropy: 1, propDistance: 200, smallPropDistance: 350 },
+  medium: { shadowMapSize: 2048, shadowExtent: 140, drawDistance: 1600, renderScale: 1, anisotropy: 4, propDistance: 320, smallPropDistance: 600 },
+  high: { shadowMapSize: 4096, shadowExtent: 200, drawDistance: 2200, renderScale: 1, anisotropy: 8, propDistance: 500, smallPropDistance: 900 },
 };
 
 const KEY = 'web-slinger.settings.v1';
@@ -47,6 +52,7 @@ export function defaultSettings(preset: GraphicsPreset): Settings {
     headTracking: false, // SPEC §3.2: off by default
     headGain: 1.6,
     headParallax: 1,
+    autoResolution: true, // lower render scale automatically when FPS drops (SPEC §13)
   };
 }
 
