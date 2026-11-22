@@ -29,8 +29,8 @@ export const LINES = {
   inheritVelocity: 0.5, // fraction of the player's velocity the stream inherits
   predictionTime: 3, // seconds of trajectory the HUD impact marker looks ahead
   maxFlightTime: 30, // stop testing for hits after this (the stream keeps flowing visually)
-  reelInSpeed: 13.2,
-  letOutSpeed: 11,
+  reelInSpeed: 20, // raised from 13.2 (playtest: felt slower than the pull line)
+  letOutSpeed: 16.5,
   minLength: 2,
   maxLength: 5000, // effectively unlimited (city diagonal is ~2.8 km); webs have no range limit
   attachLengthFactor: 1.0, // rope length at attach = current distance to the anchor

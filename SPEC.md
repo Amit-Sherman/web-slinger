@@ -188,7 +188,7 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - Releasing a hand's button detaches that web; momentum carries on.
 - **[BUILT-DEFAULT]** numbers (all in `src/config/gameplay.ts`):
   - Web range: unlimited (rope length cap 5 km, larger than the city) · stream launch speed 150 m/s, see §5.1
-  - Reel-in speed: 13.2 m/s · let-out speed: 11 m/s (+10% after first playtest) · min rope length: 2 m
+  - Reel-in speed: 20 m/s · let-out speed: 16.5 m/s (12/10 → +10% → +50% after playtests; the pull line reels at 30) · min rope length: 2 m
   - Gravity: 9.81 m/s² × 1.6 (heavier-feeling arcs) · terminal velocity: ~70 m/s
   - Air control (WASD while airborne): 9 m/s² · walk 7 m/s · sprint 13 m/s · jump 9 m/s (sprint jump 11)
   - **[DECIDED] No free speed:** running and air control can never *create* speed.
@@ -736,5 +736,6 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | M3 merged to `main` | Head-tracking confirmed working with a real webcam |
 | 2026-11-22 | Optimization pass: trimesh statics, idle-step skip, prop/static culling, worker head-tracking, auto resolution | User: low FPS + stutters; ~4× less CPU, ~10× fewer triangles |
 | 2026-11-22 | Perf pass merged to `main`; FPS is never capped by the game (browser vsync only) | User: feels great; asked not to cap FPS |
+| 2026-11-22 | Reel speeds 13.2/11 → 20/16.5 m/s | Playtest: reeling felt slow next to the pull line |
 | 2026-11-22 | Webcam video element attached to the page, wait-for-frames + retries | Bug: Firefox aborted playback of the detached video |
 | 2026-11-22 | M3: MediaPipe Face Landmarker, bundled locally; camera rig + head offset; One-Euro smoothing | SPEC §3.2 as decided; offline Docker requirement |
