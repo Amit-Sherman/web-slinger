@@ -123,7 +123,7 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   - Neutral = the average of the first 10 frames after start/recenter. Pose = raw − neutral (angles
     wrapped), then a **One-Euro filter** per channel (minCutoff 1.2, β 0.08).
   - Face lost → the pose eases back to zero (rate 3/s).
-  - Synthetic-matrix checks confirmed every sign above; real-webcam signs are **[OPEN]** until playtested.
+  - Synthetic-matrix checks confirmed every sign above; confirmed working with a real webcam in playtest.
 - **Applying it:** a camera *rig* = eye + mouse yaw/pitch (+ turn roll, dip, shake). The arms and
   the aim belong to the rig. The render camera is the rig's child and adds:
   - rotation: yaw × gain and pitch × gain (gain default 1.6×; clamped ±80° / ±60°), roll × 0.8 (±25°);
@@ -605,7 +605,7 @@ target, built in later milestones. A milestone ships only when the previous one 
 |---|---|
 | **M1 = v1 (release gate)** | Docker build, click-to-play, procedural city geometry (buildings, streets, rooftops, cel-shaded with outlines, fixed sun), first-person camera + arms, two independent lines with fire/attach/miss/release, per-hand reel in/out, momentum on release, air control, superhero landings, wall-run / crawl / jump, minimal HUD, pause + settings, movement SFX |
 | M2 (merged to `main`) | Movable props (street, rooftop, cars) · pull line with catch/hold/throw · two-body lines on props · web tethers (F). (Zip, slingshot and web balls dropped.) |
-| M3 (built on `m3-head-tracking`) | Webcam head-tracking (§3.2.1) |
+| M3 (merged to `main`) | Webcam head-tracking (§3.2.1) |
 | M4 | Living city: day/night cycle, night lighting, traffic and pedestrians |
 | Later | Game modes (crime, races, collectibles), gamepad, multiplayer, third-person/photo mode |
 
@@ -684,5 +684,6 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | Web balls removed (with prop glue and splat anchors); R unbound | Playtest: "the web ball does nothing" |
 | 2026-11-22 | M2 merged to `main` | User likes it |
 | 2026-11-22 | Repo made public, read-only (interaction limits, issues/wiki off); history re-authored to noreply email | Share with everyone without exposing a personal email |
+| 2026-11-22 | M3 merged to `main` | Head-tracking confirmed working with a real webcam |
 | 2026-11-22 | Webcam video element attached to the page, wait-for-frames + retries | Bug: Firefox aborted playback of the detached video |
 | 2026-11-22 | M3: MediaPipe Face Landmarker, bundled locally; camera rig + head offset; One-Euro smoothing | SPEC §3.2 as decided; offline Docker requirement |
