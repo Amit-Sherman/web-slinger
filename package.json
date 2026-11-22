@@ -4,13 +4,16 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-mediapipe.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/copy-mediapipe.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 8080",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",
+    "@mediapipe/tasks-vision": "1.2.3",
     "three": "0.187.0"
   },
   "devDependencies": {

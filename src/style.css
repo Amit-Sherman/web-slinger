@@ -33,6 +33,11 @@ canvas#game { display: block; width: 100vw; height: 100vh; }
   position: absolute; left: 50%; top: calc(50% + 26px); transform: translateX(-50%);
   font: 11px var(--mono); letter-spacing: 0.12em; color: var(--orange); text-shadow: 0 0 4px rgba(240, 138, 36, 0.5);
 }
+#head-state {
+  position: absolute; top: 18px; right: 24px; font: 11px var(--mono); letter-spacing: 0.15em;
+  color: var(--orange); opacity: 0.85;
+}
+#head-state.ok { color: var(--cyan); text-shadow: 0 0 4px var(--cyan-dim); }
 #crosshair-dist {
   position: absolute; left: 22px; top: 1px; font: 11px var(--mono); color: var(--cyan); text-shadow: 0 0 4px var(--cyan-dim);
 }
@@ -90,3 +95,6 @@ input[type='checkbox'] { accent-color: var(--cyan); width: 16px; height: 16px; }
 select { font: 13px var(--mono); background: var(--ink); color: var(--cyan); border: 1px solid var(--cyan-dim); padding: 4px; }
 output { font: 12px var(--mono); width: 48px; text-align: right; color: var(--cyan); }
 .note { font-size: 12px; opacity: 0.6; margin-top: 12px; }
+
+.head-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.head-row .note { flex: 1; margin: 0; }

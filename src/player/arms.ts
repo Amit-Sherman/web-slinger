@@ -51,7 +51,8 @@ export class Arms {
     device: toon({ color: 0x23272b }),
   };
 
-  constructor(private camera: THREE.PerspectiveCamera) {
+  /** `camera` is the body rig (mouse look), so the arms don't follow head-tracking glances. */
+  constructor(private camera: THREE.Object3D) {
     this.arms = [this.build(0), this.build(1)];
   }
 

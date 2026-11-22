@@ -19,6 +19,9 @@ const FIELDS: Field[] = [
   { key: 'cameraRoll', label: 'Camera roll on turns', kind: 'check' },
   { key: 'masterVolume', label: 'Master volume', kind: 'range', min: 0, max: 1, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
   { key: 'sfxVolume', label: 'SFX volume', kind: 'range', min: 0, max: 1, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+  { key: 'headTracking', label: 'Webcam head-tracking', kind: 'check' },
+  { key: 'headGain', label: 'Head look amount', kind: 'range', min: 0.5, max: 4, step: 0.1, fmt: (v) => `${v.toFixed(1)}×` },
+  { key: 'headParallax', label: 'Head lean amount', kind: 'range', min: 0, max: 2, step: 0.1, fmt: (v) => `${v.toFixed(1)}×` },
 ];
 
 export class Menu {
@@ -29,6 +32,8 @@ export class Menu {
   private tabs = document.querySelectorAll<HTMLButtonElement>('[data-tab]');
   onPlay: (() => void) | null = null;
   onSettingsChange: ((s: Settings) => void) | null = null;
+  onRecenter: (() => void) | null = null;
+  private headStatusEl: HTMLElement | null = null;
 
   constructor(private settings: Settings) {
     this.start.addEventListener('click', () => this.onPlay?.());
@@ -42,6 +47,10 @@ export class Menu {
     const el = document.getElementById('start-hint')!;
     el.textContent = text ?? 'Click to play';
     this.start.classList.toggle('loading', !!text);
+  }
+
+  setHeadStatus(text: string): void {
+    if (this.headStatusEl && this.headStatusEl.textContent !== text) this.headStatusEl.textContent = `Head-tracking: ${text}`;
   }
 
   showStart(): void {
@@ -118,9 +127,20 @@ export class Menu {
       }
       this.settingsEl.appendChild(row);
     }
-    const note = document.createElement('p');
-    note.className = 'note';
-    note.textContent = 'Webcam head-tracking arrives in milestone M3.';
-    this.settingsEl.appendChild(note);
+    // Head-tracking status + recenter (SPEC §3.2)
+    const head = document.createElement('div');
+    head.className = 'head-row';
+    const status = document.createElement('p');
+    status.className = 'note';
+    this.headStatusEl = status;
+    const recenter = document.createElement('button');
+    recenter.textContent = 'Recenter head (H)';
+    recenter.addEventListener('click', () => this.onRecenter?.());
+    head.append(status, recenter);
+    this.settingsEl.appendChild(head);
+    const privacy = document.createElement('p');
+    privacy.className = 'note';
+    privacy.textContent = 'The webcam image is processed locally in your browser and never leaves your computer.';
+    this.settingsEl.appendChild(privacy);
   }
 }

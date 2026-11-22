@@ -12,6 +12,7 @@ import { PlayerController } from '../player/controller';
 import { newPlayerState, type GameEvent } from '../player/state';
 import type { RenderPipeline } from '../render/pipeline';
 import { Sky } from '../render/sky';
+import { HeadTracker } from '../headtracking/headTracker';
 import { Hud } from '../ui/hud';
 import type { Menu } from '../ui/menu';
 import { launchVelocity, predictImpact } from '../webs/ballistics';
@@ -35,6 +36,8 @@ export class Game {
   private arms: Arms;
   private lineVisuals: LineVisuals;
   private hud = new Hud();
+  private head = new HeadTracker();
+  private aimPoint = new THREE.Vector3();
   private sfx = new Sfx();
   private mode: GameMode = new FreeRoamMode();
   private ctx: ModeContext;
@@ -59,7 +62,7 @@ export class Game {
   ) {
     const preset = PRESETS[settings.preset];
     this.cam = new FirstPersonCamera(1, preset.drawDistance * 1.2);
-    this.scene.add(this.cam.camera);
+    this.scene.add(this.cam.rig);
     this.sky = new Sky(this.scene);
     this.sky.applyPreset(preset, this.scene);
 
@@ -72,7 +75,7 @@ export class Game {
     this.props.sleepAll();
     physics.step();
 
-    this.arms = new Arms(this.cam.camera);
+    this.arms = new Arms(this.cam.rig);
     this.lineVisuals = new LineVisuals(pipeline.overlayScene);
     this.input = new Input(canvas);
     this.input.onPause = () => this.pause();
@@ -90,6 +93,8 @@ export class Game {
 
     menu.onPlay = () => this.play(canvas);
     menu.onSettingsChange = (s) => this.applySettings(s);
+    menu.onRecenter = () => this.head.recenter();
+    setInterval(() => menu.setHeadStatus(this.headStatusText()), 300);
     document.addEventListener('pointerlockchange', () => {
       if (document.pointerLockElement !== canvas && this.playing) this.pause();
     });
@@ -163,7 +168,30 @@ export class Game {
     this.hud.show(false);
   }
 
+  private headStatus(): string {
+    if (!this.settings.headTracking) return '';
+    switch (this.head.status) {
+      case 'starting': return 'HEAD · starting camera…';
+      case 'tracking': return 'HEAD';
+      case 'no-face': return 'HEAD · no face';
+      case 'error': return 'HEAD · error';
+      default: return '';
+    }
+  }
+
+  private headStatusText(): string {
+    switch (this.head.status) {
+      case 'off': return 'Off';
+      case 'starting': return 'Starting camera… (allow camera access if your browser asks)';
+      case 'tracking': return 'Tracking your head ✓ (press H to recenter)';
+      case 'no-face': return 'Camera on, no face found. Face the camera with your face lit.';
+      case 'error': return `Unavailable: ${this.head.error}`;
+    }
+  }
+
   private applySettings(s: Settings): void {
+    if (s.headTracking && this.head.status === 'off') void this.head.start();
+    if (!s.headTracking && this.head.status !== 'off') this.head.stop();
     const preset = PRESETS[s.preset];
     this.sky.applyPreset(preset, this.scene);
     this.cam.camera.far = preset.drawDistance * 1.2;
@@ -213,7 +241,9 @@ export class Game {
     s.events.length = 0;
 
     const speed = s.vel.length();
-    this.cam.update(this.eye, s.vel, this.playing ? dt : 0, this.settings);
+    this.head.update(now, dt);
+    if (this.playing && this.input.consumeRecenter()) this.head.recenter();
+    this.cam.update(this.eye, s.vel, this.playing ? dt : 0, this.settings, this.head.pose);
     this.props.sync();
     this.arms.update(s.lines, s.pull, this.tethers.shot.kind !== 'idle' ? this.tethers.shot : this.tethers.self, speed, s.mode === 'ground', dt);
     this.arms.wristWorld(0, this.wrists[0]);
@@ -225,13 +255,15 @@ export class Game {
       this.renderPos, this.cam.aim, s.vel, this.playing ? dt : 0,
     );
     this.tethers.render(this.wrists[0], this.playing ? dt : 0);
-    this.sky.update(this.cam.camera.position, this.renderPos, this.cam.camera.far);
+    this.sky.update(this.cam.worldPosition, this.renderPos, this.cam.camera.far);
     this.sfx.update(this.playing ? speed : 0, s.lines);
 
     if (this.playing) {
       // Where would a stream fired right now land? (ballistic drop + inherited velocity)
       const impact = predictImpact(this.eye, launchVelocity(this.launchVel, this.cam.aim, s.vel), this.physics, this.player.collider);
-      this.hud.update(impact, this.cam.camera, s.lines, [s.pos.distanceTo(s.lines[0].target), s.pos.distanceTo(s.lines[1].target)], speed, s.pos.y, s.pull, this.tethers.status);
+      // Aim follows the mouse only; with head-tracking the crosshair drifts to where the aim points
+      this.aimPoint.copy(this.cam.rig.position).addScaledVector(this.cam.aim, 60);
+      this.hud.update(impact, this.cam.camera, s.lines, [s.pos.distanceTo(s.lines[0].target), s.pos.distanceTo(s.lines[1].target)], speed, s.pos.y, s.pull, this.tethers.status, this.aimPoint, this.headStatus());
     }
 
     const speedLines = this.settings.motionEffects ? THREE.MathUtils.clamp((speed - 30) / 35, 0, 1) : 0;

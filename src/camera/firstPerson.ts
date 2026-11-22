@@ -1,12 +1,20 @@
-// First-person camera (SPEC §3.1): mouse-look independent of velocity, speed FOV,
-// camera roll on hard turns, landing/stagger shake.
+// First-person camera (SPEC §3.1, §3.2): mouse-look independent of velocity, speed FOV,
+// camera roll on hard turns, landing/stagger shake, and optional additive webcam head pose.
+//
+// `rig` is the body frame: eye position + mouse yaw/pitch (+ roll, dip, shake). Aim and the arms
+// follow the rig. The actual `camera` is the rig's child and adds the head pose on top (glance,
+// tilt, lean), so looking around with your head never moves your aim.
 
 import * as THREE from 'three';
-import { CAMERA } from '../config/gameplay';
+import { CAMERA, HEAD } from '../config/gameplay';
 import type { Settings } from '../config/settings';
+import type { HeadPose } from '../headtracking/headTracker';
 
 export class FirstPersonCamera {
   readonly camera: THREE.PerspectiveCamera;
+  readonly rig = new THREE.Object3D();
+  /** Camera world position (the camera itself is in rig space). */
+  readonly worldPosition = new THREE.Vector3();
   yaw = 0;
   pitch = 0;
   private roll = 0;
@@ -20,6 +28,8 @@ export class FirstPersonCamera {
   constructor(aspect: number, far: number) {
     this.camera = new THREE.PerspectiveCamera(CAMERA.baseFov, aspect, CAMERA.near, far);
     this.camera.rotation.order = 'YXZ';
+    this.rig.rotation.order = 'YXZ';
+    this.rig.add(this.camera);
   }
 
   look(dx: number, dy: number, s: Settings): void {
@@ -44,7 +54,7 @@ export class FirstPersonCamera {
     this.dipVel -= amount;
   }
 
-  update(eye: THREE.Vector3, vel: THREE.Vector3, dt: number, s: Settings): void {
+  update(eye: THREE.Vector3, vel: THREE.Vector3, dt: number, s: Settings, head: HeadPose | null = null): void {
     const speed = vel.length();
     const effects = s.motionEffects;
 
@@ -74,10 +84,31 @@ export class FirstPersonCamera {
     const sh = effects ? this.trauma * this.trauma : this.trauma * this.trauma * 0.3;
     const n = (o: number): number => Math.sin(this.shakeT * 1.3 + o) * Math.sin(this.shakeT * 0.7 + o * 2.1);
 
-    this.camera.position.copy(eye);
-    this.camera.position.y += this.dip + n(3) * sh * 0.15;
-    this.camera.rotation.set(this.pitch + n(1) * sh * 0.06, this.yaw + n(2) * sh * 0.06, this.roll + n(4) * sh * 0.05);
+    this.rig.position.copy(eye);
+    this.rig.position.y += this.dip + n(3) * sh * 0.15;
+    this.rig.rotation.set(this.pitch + n(1) * sh * 0.06, this.yaw + n(2) * sh * 0.06, this.roll + n(4) * sh * 0.05);
+
+    // Head pose (additive, relative to the body)
+    if (head && s.headTracking) {
+      const g = s.headGain;
+      const clamp = THREE.MathUtils.clamp;
+      this.camera.rotation.set(
+        clamp(head.pitch * g, -HEAD.maxPitch, HEAD.maxPitch),
+        clamp(head.yaw * g, -HEAD.maxYaw, HEAD.maxYaw),
+        clamp(head.roll * HEAD.rollGain, -HEAD.maxRoll, HEAD.maxRoll),
+      );
+      const p = s.headParallax;
+      this.camera.position.set(
+        clamp(head.x * p, -HEAD.maxLean, HEAD.maxLean),
+        clamp(head.y * p, -HEAD.maxLean, HEAD.maxLean),
+        clamp(head.z * p, -HEAD.maxLean, HEAD.maxLean),
+      );
+    } else {
+      this.camera.rotation.set(0, 0, 0);
+      this.camera.position.set(0, 0, 0);
+    }
     this.camera.updateProjectionMatrix();
-    this.camera.updateMatrixWorld();
+    this.rig.updateMatrixWorld(true);
+    this.camera.getWorldPosition(this.worldPosition);
   }
 }

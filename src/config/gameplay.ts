@@ -121,3 +121,12 @@ export const TETHER = {
   strandRadius: 0.15, // collider radius of a static↔static strand (you can stand on it)
   fadeTime: 0.6, // removed tethers fade out
 };
+
+// Webcam head-tracking (SPEC §3.2): limits on the additive head pose
+export const HEAD = {
+  maxYaw: (80 * Math.PI) / 180,
+  maxPitch: (60 * Math.PI) / 180,
+  maxRoll: (25 * Math.PI) / 180,
+  rollGain: 0.8, // head tilt is applied a bit softer than it happens
+  maxLean: 0.35, // metres of parallax in any direction
+};

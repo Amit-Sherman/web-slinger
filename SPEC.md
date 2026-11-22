@@ -95,6 +95,39 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   the crosshair is drawn where the aim ray lands, so it drifts on screen when you glance
   with your head. Glance to spot an anchor, then aim at it with the mouse.
 
+#### 3.2.1 Implementation (M3, built)
+- **Library:** `@mediapipe/tasks-vision` (Apache-2.0), loaded lazily (a separate ~150 KB chunk)
+  only when head-tracking is turned on. Its WASM runtime is copied from `node_modules` into
+  `public/mediapipe/wasm/` by `scripts/copy-mediapipe.mjs` (runs as `predev`/`prebuild`; git-ignored).
+  The model `public/mediapipe/face_landmarker.task` (float16 v1, 3.7 MB, sha256 `64184e22…`) is
+  committed. Everything is served by the game itself, so it **works offline in Docker**.
+- **Camera:** `getUserMedia` 640×480 front camera (needs a secure context: `localhost` qualifies).
+  The landmarker runs in `VIDEO` mode at ~30 Hz, GPU delegate with a CPU fallback, 1 face,
+  `outputFacialTransformationMatrixes: true`.
+- **Pose from the face matrix** (camera space, cm; x = image right = the player's LEFT, y up,
+  z towards the camera; column- vs row-major is auto-detected by where the large z translation sits):
+  - yaw = atan2(f.x, f.z), pitch = atan2(f.y, |f.xz|), with the face forward f = R·(0,0,1).
+    Turning left → +yaw (look left); looking up → +pitch.
+  - roll = atan2(up.x, up.y), with up = R·(0,1,0). Tilting to the left shoulder → +roll.
+  - lean x = −t.x/100 (+ = moved right), y = t.y/100, z = −t.z/100 (+ = leaned back).
+  - Neutral = the average of the first 10 frames after start/recenter. Pose = raw − neutral (angles
+    wrapped), then a **One-Euro filter** per channel (minCutoff 1.2, β 0.08).
+  - Face lost → the pose eases back to zero (rate 3/s).
+  - Synthetic-matrix checks confirmed every sign above; real-webcam signs are **[OPEN]** until playtested.
+- **Applying it:** a camera *rig* = eye + mouse yaw/pitch (+ turn roll, dip, shake). The arms and
+  the aim belong to the rig. The render camera is the rig's child and adds:
+  - rotation: yaw × gain and pitch × gain (gain default 1.6×; clamped ±80° / ±60°), roll × 0.8 (±25°);
+  - position: lean × parallax (default 1×; clamped ±0.35 m per axis).
+- **Settings:** "Webcam head-tracking" (off by default), "Head look amount" 0.5–4×, "Head lean
+  amount" 0–2×, a status line (starting / tracking / no face / unavailable + reason), a
+  "Recenter head (H)" button, and a note that the image is processed locally. **H** recenters.
+- **HUD:** the crosshair (and the pull/tether status under it) is positioned at the projected
+  aim point. A small `HEAD` tag at the top right is cyan while tracking, orange with "no face" /
+  "error" otherwise.
+- Checked in headless Firefox with a fake camera: the camera opens, WASM + model load from the
+  local server, detection runs every frame, "no face" is reported without errors. An injected
+  20° glance turns the view while the crosshair, aim and arms stay with the mouse.
+
 ---
 
 ## 4. Movement & Web-Swinging — [DECIDED core / BUILT-DEFAULT numbers]
@@ -517,7 +550,8 @@ src/
   main.ts            # bootstrap (physics init, city gen, Game)
   core/              # game.ts (fixed-timestep loop, wiring), physics.ts (Rapier wrapper), rng.ts
   input/             # actions.ts (action map + labels), input.ts (per-tick snapshots)
-  camera/            # firstPerson.ts (look, FOV, roll, shake); head-tracking goes here in M3
+  camera/            # firstPerson.ts (rig = mouse look, FOV, roll, shake; camera = rig + head pose)
+  headtracking/      # headTracker.ts (webcam + MediaPipe → filtered head pose), oneEuro.ts
   player/            # state.ts (serialisable state + events), controller.ts (movement modes), arms.ts
   webs/              # lines.ts (swing lines + two-body elastic solver), ballistics.ts (stream tip,
                      # prediction, anchors), pull.ts, tethers.ts, lineVisuals.ts
@@ -561,7 +595,7 @@ target, built in later milestones. A milestone ships only when the previous one 
 |---|---|
 | **M1 = v1 (release gate)** | Docker build, click-to-play, procedural city geometry (buildings, streets, rooftops, cel-shaded with outlines, fixed sun), first-person camera + arms, two independent lines with fire/attach/miss/release, per-hand reel in/out, momentum on release, air control, superhero landings, wall-run / crawl / jump, minimal HUD, pause + settings, movement SFX |
 | M2 (merged to `main`) | Movable props (street, rooftop, cars) · pull line with catch/hold/throw · two-body lines on props · web tethers (F). (Zip, slingshot and web balls dropped.) |
-| M3 | Webcam head-tracking |
+| M3 (built on `m3-head-tracking`) | Webcam head-tracking (§3.2.1) |
 | M4 | Living city: day/night cycle, night lighting, traffic and pedestrians |
 | Later | Game modes (crime, races, collectibles), gamepad, multiplayer, third-person/photo mode |
 
@@ -639,3 +673,4 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | Light props pushed (≤600 N), heavy props climbable | Walking into a trash can used to climb it |
 | 2026-11-22 | Web balls removed (with prop glue and splat anchors); R unbound | Playtest: "the web ball does nothing" |
 | 2026-11-22 | M2 merged to `main` | User likes it |
+| 2026-11-22 | M3: MediaPipe Face Landmarker, bundled locally; camera rig + head offset; One-Euro smoothing | SPEC §3.2 as decided; offline Docker requirement |

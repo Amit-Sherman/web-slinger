@@ -37,6 +37,13 @@ aim at the orange diamond (where the web will land), not the crosshair, for long
 to swing. Let go near the bottom of the arc for
 speed, or near the top for height. Alternate hands for rhythm. Walk into any wall to climb it.
 
+## Webcam head-tracking (optional)
+
+Esc → Settings → **Webcam head-tracking**. Allow camera access when the browser asks. Turn your
+head to glance around, and lean to peek. Your aim stays on the mouse. Press **H** to recenter while
+looking straight at the screen. Tune "Head look amount" if glances feel too small or too big.
+The camera image is processed locally in your browser; nothing is uploaded, and it works offline.
+
 ## Develop
 
 ```bash

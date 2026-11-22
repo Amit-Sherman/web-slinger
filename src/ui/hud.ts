@@ -13,7 +13,9 @@ export class Hud {
   private extra = document.getElementById('hud-extra')!;
   private marker = document.getElementById('impact-marker')!;
   private pullEl = document.getElementById('pull-state')!;
+  private headEl = document.getElementById('head-state')!;
   private v = new THREE.Vector3();
+  private w = new THREE.Vector3();
 
   show(visible: boolean): void {
     this.root.style.display = visible ? 'block' : 'none';
@@ -23,8 +25,18 @@ export class Hud {
   update(
     impact: { point: THREE.Vector3; distance: number } | null, camera: THREE.Camera,
     lines: [LineState, LineState], bodyDist: [number, number], speed: number, altitude: number,
-    pull: LineState, tetherStatus: string,
+    pull: LineState, tetherStatus: string, aimPoint: THREE.Vector3, headStatus: string,
   ): void {
+    // Crosshair sits where the (mouse) aim points; centred unless head-tracking moves the view
+    const a = this.v.copy(aimPoint).project(camera);
+    const onScreen = a.z < 1 && Math.abs(a.x) < 1 && Math.abs(a.y) < 1;
+    this.crosshair.style.display = onScreen ? 'block' : 'none';
+    this.crosshair.style.left = `${((a.x + 1) / 2) * 100}%`;
+    this.crosshair.style.top = `${((1 - a.y) / 2) * 100}%`;
+    this.headEl.textContent = headStatus;
+    this.headEl.className = headStatus === 'HEAD' ? 'ok' : '';
+    this.pullEl.style.left = this.crosshair.style.left;
+    this.pullEl.style.top = `calc(${this.crosshair.style.top} + 26px)`;
     this.pullEl.textContent = tetherStatus || (pull.holding ? 'HOLDING · release middle mouse to throw'
       : pull.kind === 'attached' ? 'PULLING' : pull.kind === 'firing' ? 'PULL' : '');
     this.crosshair.classList.toggle('lock', !!impact);
@@ -34,7 +46,7 @@ export class Hud {
       this.marker.style.display = inFront ? 'block' : 'none';
       this.marker.style.left = `${((p.x + 1) / 2) * 100}%`;
       this.marker.style.top = `${((1 - p.y) / 2) * 100}%`;
-      this.dist.textContent = `${impact.point.distanceTo(camera.position).toFixed(0)}m`;
+      this.dist.textContent = `${impact.point.distanceTo(camera.getWorldPosition(this.w)).toFixed(0)}m`;
     } else {
       this.marker.style.display = 'none';
       this.dist.textContent = '';

@@ -12,6 +12,9 @@ export interface Settings {
   cameraRoll: boolean;
   masterVolume: number;
   sfxVolume: number;
+  headTracking: boolean;
+  headGain: number;
+  headParallax: number;
 }
 
 export interface PresetValues {
@@ -41,6 +44,9 @@ export function defaultSettings(preset: GraphicsPreset): Settings {
     cameraRoll: true,
     masterVolume: 0.8,
     sfxVolume: 1,
+    headTracking: false, // SPEC §3.2: off by default
+    headGain: 1.6,
+    headParallax: 1,
   };
 }
 

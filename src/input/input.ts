@@ -73,6 +73,7 @@ export class Input {
     for (const a of this.codeToActions.get(code) ?? []) {
       const nowDown = this.isActionDown(a);
       if (isDown && nowDown) this.pressedSinceTick[a] = true;
+      if (isDown && a === 'recenterHead') this.recenterPressed = true;
       if (!isDown && !nowDown) this.releasedSinceTick[a] = true;
     }
   }
@@ -83,6 +84,14 @@ export class Input {
 
   releaseAll(): void {
     for (const code of [...this.codesDown]) this.setCode(code, false);
+  }
+
+  /** Head-tracking recenter (key H): read once per frame, outside the simulation tick. */
+  private recenterPressed = false;
+  consumeRecenter(): boolean {
+    const r = this.recenterPressed;
+    this.recenterPressed = false;
+    return r;
   }
 
   /** Build the snapshot for one simulation tick and clear edge events. */
