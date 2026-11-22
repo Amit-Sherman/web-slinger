@@ -18,12 +18,13 @@ export const PLAYER = {
   jumpSpeed: 9,
   sprintJumpSpeed: 11,
   airControl: 9, // m/s² steering force while airborne
+  airControlMaxSpeed: 13, // air control can't raise horizontal speed past max(current, this)
   airDrag: 0.02, // fraction of velocity lost per second
 };
 
 export const LINES = {
   // Web stream (SPEC §5.1): no range limit, ballistic drop.
-  launchSpeed: 110, // m/s along the aim
+  launchSpeed: 150, // m/s along the aim (raised from 110 after playtest)
   webGravity: 9.81, // web strands are light: normal gravity, not the player's heavier 1.6×
   inheritVelocity: 0.5, // fraction of the player's velocity the stream inherits
   predictionTime: 4, // seconds of trajectory the HUD impact marker looks ahead

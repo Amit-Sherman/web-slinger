@@ -138,10 +138,17 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   per-hand **let out** lengthens it (drop lower, swing wider).
 - Releasing a hand's button detaches that web; momentum carries on.
 - **[BUILT-DEFAULT]** numbers (all in `src/config/gameplay.ts`):
-  - Web range: unlimited (rope length cap 5 km, larger than the city) · stream launch speed 110 m/s, see §5.1
+  - Web range: unlimited (rope length cap 5 km, larger than the city) · stream launch speed 150 m/s, see §5.1
   - Reel-in speed: 13.2 m/s · let-out speed: 11 m/s (+10% after first playtest) · min rope length: 2 m
   - Gravity: 9.81 m/s² × 1.6 (heavier-feeling arcs) · terminal velocity: ~70 m/s
   - Air control (WASD while airborne): 9 m/s² · walk 7 m/s · sprint 13 m/s · jump 9 m/s (sprint jump 11)
+  - **[DECIDED] No free speed:** running and air control can never *create* speed.
+    - Ground: above run speed you keep momentum (from swings or falls), but it only bleeds
+      off at 10 m/s². Input steers the direction without adding magnitude.
+    - Air: control steers, but horizontal speed after control may not exceed
+      max(speed before, 13 m/s). This blocks both holding W and air-strafing.
+    - The only ways to go faster are gravity, swings, reeling and wall-jumps.
+    - (Bug found in playtest: you could run up to unlimited speed on the ground.)
   - Player capsule: radius 0.4 m, total height ~1.9 m; eyes 0.7 m above centre
 - **Headless check (elastic lines):** dropping from 12 m below a bridge beam with 12 m/s
   forward: the line catches with a 16% peak stretch, then swings smoothly at ~22 m/s through
@@ -188,9 +195,10 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 ### 5.1 Web stream — [DECIDED, built]
 - **Hold LMB / RMB = a continuous stream of web** pours from that hand's launcher nozzle for as
   long as the button is held. There is **no range limit**.
-- The stream is physical. Its **tip flies ballistically**: launch velocity = aim × 110 m/s +
+- The stream is physical. Its **tip flies ballistically**: launch velocity = aim × 150 m/s +
   50% of the player's velocity, then **gravity (9.81 m/s², normal gravity, because web is light)**
-  pulls it down like a bullet. Real drop at range: ~0.5 m at 35 m, ~125 m at 580 m.
+  pulls it down like a bullet. Real drop at range: ~0.3 m at 35 m, ~2.5 m at 100 m, ~73 m at 580 m.
+  (Launch speed raised from 110 to 150 m/s after playtest: "webs should come out faster".)
   - Gameplay tip: integrated each 60 Hz tick (semi-implicit Euler), with a raycast swept along
     each step. The first hit = the anchor. Rope rest length = the distance from the player to
     the anchor at that moment.
@@ -200,7 +208,7 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
     stream like a garden hose. The far end is drawn at the gameplay tip. Particles are capped
     at 160 by thinning the oldest half.
   - On attach, the curved stream blends into the straight elastic line over 0.15 s.
-  - **Readability (the stream lives only ~0.25 s at short range, at 110 m/s, which the user chose to keep):**
+  - **Readability (the stream lives only ~0.2 s at short range, because the user prefers a fast web):**
     - a **muzzle flash** at the nozzle when firing starts (0.14 s);
     - a **glowing tip glob** at the stream's head, constant on-screen size, so it reads at any distance;
     - the stream is **brighter and ~35% thicker** than an attached line, and its core is
@@ -513,3 +521,6 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | Keep stream at 110 m/s; add muzzle flash, tip glow, flowing pulses, catch splat | User chose speed over slower visible flight |
 | 2026-11-22 | Fixed-capacity line buffers | Growing Line2 geometry was silently truncated → stream invisible |
 | 2026-11-22 | Lines softer: elasticity 300, ζ 0.3, max stretch 50% | Requested: "a bit more elastic" |
+| 2026-11-22 | M1 merged to `main`; M2 started on `m2-abilities` | User loves the swinging |
+| 2026-11-22 | Web launch speed 110 → 150 m/s | Requested: webs should come out faster |
+| 2026-11-22 | Running/air control can't create speed (bleed-only above run speed, air cap) | Bug: unlimited speed by running |

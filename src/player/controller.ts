@@ -116,9 +116,10 @@ export class PlayerController {
     const horiz = this.t2.set(s.vel.x, 0, s.vel.z);
     const hs = horiz.length();
     if (hs > speed && target.lengthSq() > 0 && horiz.dot(target) > 0) {
-      // Faster than run speed (e.g. after a swing): bleed off gently, keep momentum
-      horiz.setLength(Math.max(speed, hs - PLAYER.groundFriction * dt));
-      horiz.addScaledVector(this.wish, PLAYER.groundAccel * 0.25 * dt);
+      // Faster than run speed (e.g. after a swing): keep momentum but only ever bleed it off.
+      // Input may steer the direction, never add speed (running can't exceed run speed).
+      const newSpeed = Math.max(speed, hs - PLAYER.groundFriction * dt);
+      horiz.addScaledVector(this.wish, PLAYER.groundAccel * 0.25 * dt).setLength(newSpeed);
     } else {
       const diff = target.sub(horiz);
       const maxDelta = PLAYER.groundAccel * dt * (hs > speed ? 0.5 : 1);
@@ -139,7 +140,20 @@ export class PlayerController {
   private airMove(controlScale: number, dt: number): void {
     const s = this.state;
     s.vel.y -= PHYSICS.gravity * dt;
-    s.vel.addScaledVector(this.wish, PLAYER.airControl * controlScale * dt);
+    // Air control steers but never creates speed: horizontal speed may not end up above
+    // max(speed before, airControlMaxSpeed). Swing momentum is kept; holding W (or air-strafing
+    // by turning) can't build speed from nothing.
+    if (this.wish.lengthSq() > 0 && controlScale > 0) {
+      const before = Math.hypot(s.vel.x, s.vel.z);
+      s.vel.x += this.wish.x * PLAYER.airControl * dt;
+      s.vel.z += this.wish.z * PLAYER.airControl * dt;
+      const after = Math.hypot(s.vel.x, s.vel.z);
+      const cap = Math.max(before, PLAYER.airControlMaxSpeed);
+      if (after > cap) {
+        s.vel.x *= cap / after;
+        s.vel.z *= cap / after;
+      }
+    }
     s.vel.multiplyScalar(1 - PLAYER.airDrag * dt);
   }
 
