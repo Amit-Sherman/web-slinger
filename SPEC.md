@@ -103,13 +103,14 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - **Physics + assist:** real pendulum physics (gravity, momentum, rope tension), tuned
   to feel good, with small assists (e.g. slight momentum preservation at release, soft
   rope stretch) but **no auto-aim**.
-- **Manual aim:** a web goes exactly where the crosshair points. It attaches only if a
-  raycast hits real geometry (building, bridge, tree, lamp post) within max web range.
-  Miss → the web visibly shoots out, falls limp and retracts. No sky-hooks.
+- **Manual aim, ballistic web, no range limit (see §5.1):** the web is a physical stream
+  that drops under gravity like a bullet. It attaches only where its flying tip actually
+  hits real geometry (building, bridge, tree, lamp post, even the street). No sky-hooks and
+  no auto-aim. An HUD marker shows where a stream fired now would land.
 
 ### 4.2 Two independent hands
 - Left hand and right hand each have their own web, state and rope length.
-- Hand web states: `idle → firing (travel time) → attached → released`.
+- Hand web states: `idle → firing (stream in flight) → attached → idle` (release at any point).
 - Each attached web is a **one-sided distance constraint** (a rope: taut when stretched
   to its length, slack when closer). Both webs can be attached at once; both constraints act.
 - **[DECIDED] Elastic lines:** lines are not rigid ropes. They **stretch and pull back**
@@ -136,7 +137,7 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
   per-hand **let out** lengthens it (drop lower, swing wider).
 - Releasing a hand's button detaches that web; momentum carries on.
 - **[BUILT-DEFAULT]** numbers (all in `src/config/gameplay.ts`):
-  - Max web range: 90 m · web travel speed: 250 m/s
+  - Web range: unlimited (rope length cap 5 km, larger than the city) · stream launch speed 110 m/s, see §5.1
   - Reel-in speed: 13.2 m/s · let-out speed: 11 m/s (+10% after first playtest) · min rope length: 2 m
   - Gravity: 9.81 m/s² × 1.6 (heavier-feeling arcs) · terminal velocity: ~70 m/s
   - Air control (WASD while airborne): 9 m/s² · walk 7 m/s · sprint 13 m/s · jump 9 m/s (sprint jump 11)
@@ -173,6 +174,7 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 ## 5. Web Abilities — [DECIDED]
 
 1. **Swing (per hand):** fire/hold/release with LMB (left) or RMB (right). Reel per hand (§6).
+   Firing is a continuous web stream (§5.1).
 2. **Web-zip / point launch:** shoot a web to the targeted point, zip straight to it fast,
    and launch off it with a boost when you reach it (if you press jump on arrival).
 3. **Dual-web slingshot:** attach both webs to points ahead, let both out / pull back,
@@ -181,6 +183,32 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
    yank yourself to it.
 5. **Web-shooter combat:** fire web balls that stick to surfaces and objects (and future
    enemies, to trap them). Web up an object and throw it.
+
+### 5.1 Web stream — [DECIDED, built]
+- **Hold LMB / RMB = a continuous stream of web** pours from that hand's launcher nozzle for as
+  long as the button is held. There is **no range limit**.
+- The stream is physical. Its **tip flies ballistically**: launch velocity = aim × 110 m/s +
+  50% of the player's velocity, then **gravity (9.81 m/s², normal gravity, because web is light)**
+  pulls it down like a bullet. Real drop at range: ~0.5 m at 35 m, ~125 m at 580 m.
+  - Gameplay tip: integrated each 60 Hz tick (semi-implicit Euler), with a raycast swept along
+    each step. The first hit = the anchor. Rope rest length = the distance from the player to
+    the anchor at that moment.
+  - After 30 s of flight the tip stops testing for hits (the stream keeps flowing visually).
+  - Visual stream: every frame a particle is emitted at the nozzle with the *current* aim, and
+    all particles fall under the same gravity. Moving your aim while streaming bends the
+    stream like a garden hose. The far end is drawn at the gameplay tip. Particles are capped
+    at 160 by thinning the oldest half.
+  - On attach, the curved stream blends into the straight elastic line over 0.15 s.
+- **Release = disconnect.** The strand separates from the hand and **lingers in the world for
+  2.5 s**, simulated as a 24-point Verlet strand under gravity (it rests on the street rather
+  than sinking through). If it was attached it **keeps hanging from its anchor**; if it was
+  still in flight it falls freely. It fades over the last 0.7 s and is removed.
+  **At most 8 strands** exist at once (the oldest is recycled), so the load never grows.
+- **HUD:** an orange diamond marks the predicted impact point (4 s look-ahead, using the same
+  ballistics); the crosshair is solid when a hit is predicted, and the distance readout is to that
+  point. The gauge reads `STREAM <distance>` while firing.
+- **Audio:** a continuous hiss per hand (stereo-panned) while streaming.
+- All numbers live in `LINES` in `src/config/gameplay.ts`.
 
 ---
 
@@ -292,7 +320,7 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
     jointed segments each, and a two-segment thumb.
   - A **slim watch-style launcher** on top of each wrist: dark band, small body, an orange
     bezel ring that **spins while reeling** (with a notch so the spin reads), a round face
-    light (dim = idle, cyan = attached, orange = firing/missed), and a short orange nozzle.
+    light (dim = idle, cyan = attached, orange = streaming), and a short orange nozzle.
     **Lines leave from the nozzle.**
   - Poses: relaxed half-curl at rest, with the hands visible in the lower corners. On fire
     the hand opens and the wrist flicks up. While holding a line it makes a fist and the
@@ -332,10 +360,12 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 ### 12.1 HUD — [DECIDED: minimal, visor-styled]
 - Styled as Lineweaver's **visor display**: thin cyan lines, slight glow, faint scanline
   texture, monospace numbers.
-- **Crosshair:** hollow ring when the aim ray hits nothing in range; **solid** when it hits
-  an attachable surface within max range. Small distance readout next to it (optional).
+- **Crosshair:** shows the aim direction. It's a hollow ring when no hit is predicted, and
+  **solid** when a stream fired now would hit something within 4 s of flight.
+- **Impact marker:** a small orange diamond at the predicted landing point (it sits below the
+  crosshair at range because of web drop), with a distance readout next to the crosshair.
 - **Two rope gauges** (bottom left = left hand, bottom right = right hand): state
-  (idle / firing / attached) and current line length in metres.
+  (IDLE / STREAM / TAUT / SLACK / REEL IN / LET OUT) and line length in metres (stream distance while firing).
 - Nothing else on screen by default. A settings toggle can show extra info (speed, altitude).
 
 ### 12.2 Start flow & menus — [DECIDED: straight into the city]
@@ -388,8 +418,9 @@ src/
 - **Player modes:** `ground | air | wall | wallrun | swim`. Systems emit `GameEvent`s
   (fire, attach, miss, release, land, step, jump, wallJump, wallStick, stagger, splash), which
   drive audio, camera shake and arm recoil. Gameplay never calls audio or rendering directly.
-- Debug: `?shot&cam=x,y,z,yawDeg,pitchDeg` hides the start overlay and places the camera
-  (used for automated screenshots).
+- Debug: `?shot&cam=x,y,z,yawDeg,pitchDeg[&lines]` hides the start overlay, places the camera,
+  optionally attaches both lines, and exposes `window.__game` (`debugPlay()` runs the sim without
+  pointer lock). Used for automated screenshots and scripted play.
 
 - All tunable gameplay numbers live in `src/config/`, never hard-coded in systems.
 
@@ -462,3 +493,6 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | Lines are elastic spring-dampers (450 elasticity, ζ 0.35, 35% max stretch) | Requested: lines should stretch and pull back like real silk |
 | 2026-11-22 | Reel speeds +10% (13.2 in / 11 out) | Requested after playtest |
 | 2026-11-22 | Natural gloved hands with jointed fingers + watch-style launcher | Requested: hands should look natural |
+| 2026-11-22 | Web = continuous stream while held, ballistic drop, unlimited range | Requested: realistic web with bullet-like drop |
+| 2026-11-22 | Released strands linger 2.5 s under gravity, then fade; max 8 | Requested: webs stay briefly but never pile up |
+| 2026-11-22 | HUD impact marker from ballistic prediction | Makes aiming with drop learnable |

@@ -29,7 +29,9 @@ Open **http://localhost:8080** in Chrome, Edge or Firefox and click to play.
 | Ctrl or C | Crouch · drop off a wall |
 | Esc | Pause & settings |
 
-Tips: aim at a building and hold a mouse button to swing. Let go near the bottom of the arc for
+Tips: hold a mouse button to pour a web stream. It has no range limit but drops with gravity, so
+aim at the orange diamond (where the web will land), not the crosshair, for long shots. Keep holding
+to swing. Let go near the bottom of the arc for
 speed, or near the top for height. Alternate hands for rhythm. Walk into any wall to climb it.
 
 ## Develop
