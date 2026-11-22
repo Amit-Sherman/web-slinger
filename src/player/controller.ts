@@ -16,7 +16,6 @@ const UP = new THREE.Vector3(0, 1, 0);
 
 export class PlayerController {
   readonly collider: RAPIER.Collider;
-  readonly body: RAPIER.RigidBody;
   private cc: RAPIER.KinematicCharacterController;
   props: Props | null = null;
   private wish = new THREE.Vector3();
@@ -28,19 +27,19 @@ export class PlayerController {
 
   constructor(private physics: Physics, private city: CityData, readonly state: PlayerState) {
     const R = physics.R;
-    // Kinematic body so movable props get pushed properly (SPEC §7.1)
-    this.body = physics.world.createRigidBody(
-      R.RigidBodyDesc.kinematicPositionBased().setTranslation(state.pos.x, state.pos.y, state.pos.z),
+    // A standalone collider moved by the character controller. (Parenting it to a kinematic
+    // body made the controller sink into the ground and get stuck, see SPEC §14.) The controller
+    // pushes movable props itself, using the character mass.
+    this.collider = physics.world.createCollider(
+      R.ColliderDesc.capsule(PLAYER.capsuleHalfHeight, PLAYER.capsuleRadius).setTranslation(state.pos.x, state.pos.y, state.pos.z),
     );
-    this.collider = physics.world.createCollider(R.ColliderDesc.capsule(PLAYER.capsuleHalfHeight, PLAYER.capsuleRadius), this.body);
     this.cc = physics.world.createCharacterController(0.03);
     this.cc.setSlideEnabled(true);
     this.cc.setMaxSlopeClimbAngle((50 * Math.PI) / 180);
     this.cc.setMinSlopeSlideAngle((60 * Math.PI) / 180);
     this.cc.enableAutostep(0.5, 0.3, false);
     this.cc.enableSnapToGround(0.4);
-    this.cc.setApplyImpulsesToDynamicBodies(true);
-    this.cc.setCharacterMass(PROPS.playerMass);
+    this.cc.setApplyImpulsesToDynamicBodies(false); // we push props ourselves (force-limited), see pushProp
   }
 
   eyePosition(out: THREE.Vector3, pos = this.state.pos): THREE.Vector3 {
@@ -57,8 +56,7 @@ export class PlayerController {
       l.kind = 'idle';
       l.holding = false;
     }
-    this.body.setTranslation({ x, y, z }, true);
-    this.body.setNextKinematicTranslation({ x, y, z });
+    this.collider.setTranslation({ x, y, z });
   }
 
   /** One simulation tick. `aim` is the unit look direction, `yaw` the body heading. */
@@ -243,7 +241,7 @@ export class PlayerController {
     const mv = this.cc.computedMovement();
     const grounded = this.cc.computedGrounded();
     s.pos.x += mv.x; s.pos.y += mv.y; s.pos.z += mv.z;
-    this.body.setNextKinematicTranslation({ x: s.pos.x, y: s.pos.y, z: s.pos.z });
+    this.collider.setTranslation({ x: s.pos.x, y: s.pos.y, z: s.pos.z });
 
     // Velocity follows the (rope-corrected) motion; remove components pushed into obstacles
     s.vel.copy(this.vPre);
@@ -252,9 +250,11 @@ export class PlayerController {
       const c = this.cc.computedCollision(i);
       if (!c) continue;
       const n = new THREE.Vector3(c.normal1.x, c.normal1.y, c.normal1.z);
+      const pushable = this.pushProp(c.collider, n, dt);
       const into = s.vel.dot(n);
       if (into < 0) s.vel.addScaledVector(n, -into);
-      if (Math.abs(n.y) < WALL.stickMaxNormalY) wallN = n;
+      // Light props are pushed, not climbed; heavy props (cars, AC units) and the city are walls
+      if (!pushable && Math.abs(n.y) < WALL.stickMaxNormalY) wallN = n;
     }
 
     const moved = this.t1.set(mv.x, 0, mv.z).length();
@@ -299,6 +299,26 @@ export class PlayerController {
         this.maintainWall(input, grounded);
         break;
     }
+  }
+
+  /**
+   * Walking/flying into a movable prop pushes it, with at most `PROPS.maxPushForce` (a strong
+   * person): trash cans and crates slide away, a car's friction holds it.
+   */
+  private pushProp(collider: RAPIER.Collider | null, n: THREE.Vector3, dt: number): boolean {
+    const body = collider?.parent();
+    if (!body || !body.isDynamic()) return false;
+    const light = body.mass() < PROPS.climbableMass;
+    const into = -this.vPre.dot(n); // our speed towards the prop
+    if (into <= 0) return light;
+    const bv = body.linvel();
+    const propAlong = -(bv.x * n.x + bv.y * n.y + bv.z * n.z);
+    const dv = into - propAlong;
+    if (dv > 0) {
+      const j = Math.min(body.mass() * dv, PROPS.maxPushForce * dt);
+      body.applyImpulse({ x: -n.x * j, y: -n.y * j, z: -n.z * j }, true);
+    }
+    return light;
   }
 
   /** Is this wall contact deliberate? (SPEC §4.3: grab vs. slide) */

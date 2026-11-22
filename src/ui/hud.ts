@@ -23,10 +23,10 @@ export class Hud {
   update(
     impact: { point: THREE.Vector3; distance: number } | null, camera: THREE.Camera,
     lines: [LineState, LineState], bodyDist: [number, number], speed: number, altitude: number,
-    pull: LineState,
+    pull: LineState, tetherStatus: string,
   ): void {
-    this.pullEl.textContent = pull.holding ? 'HOLDING · release middle mouse to throw'
-      : pull.kind === 'attached' ? 'PULLING' : pull.kind === 'firing' ? 'PULL' : '';
+    this.pullEl.textContent = tetherStatus || (pull.holding ? 'HOLDING · release middle mouse to throw'
+      : pull.kind === 'attached' ? 'PULLING' : pull.kind === 'firing' ? 'PULL' : '');
     this.crosshair.classList.toggle('lock', !!impact);
     if (impact) {
       const p = this.v.copy(impact.point).project(camera);

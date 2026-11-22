@@ -177,12 +177,13 @@ export class Arms {
     this.arms[hand].flick = 1;
   }
 
-  /** The pull line uses the right arm whenever the right swing line is idle. */
-  update(lines: [LineState, LineState], pull: LineState, speed: number, grounded: boolean, dt: number): void {
+  /** The pull line uses the right arm (tether shots the left) whenever that hand's swing line is idle. */
+  update(lines: [LineState, LineState], pull: LineState, tether: LineState, speed: number, grounded: boolean, dt: number): void {
     this.bob += dt * (grounded ? Math.min(speed, 13) * 0.9 : 0);
     for (const hand of [0, 1] as Hand[]) {
       const arm = this.arms[hand];
-      const l = hand === 1 && lines[1].kind === 'idle' && pull.kind !== 'idle' ? pull : lines[hand];
+      const l = hand === 1 && lines[1].kind === 'idle' && pull.kind !== 'idle' ? pull
+        : hand === 0 && lines[0].kind === 'idle' && tether.kind !== 'idle' ? tether : lines[hand];
       const active = l.kind === 'firing' || l.kind === 'attached';
 
       // Aim the forearm at the line target, clamped to stay in front of the camera

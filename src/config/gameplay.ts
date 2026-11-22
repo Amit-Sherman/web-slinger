@@ -95,6 +95,8 @@ export const PROPS = {
   stickySettleTime: 3, // …or after this long, wherever it is
   glueDuration: 20, // seconds a glued prop stays fixed before it's released
   playerMass: 80, // kg, for two-body rope forces and character pushes
+  maxPushForce: 600, // N: walking into props pushes them at most this hard (a car's friction holds)
+  climbableMass: 200, // kg: lighter props are pushed when you walk into them, heavier ones can be climbed
 };
 
 // Web balls (SPEC §5.2)
@@ -124,4 +126,15 @@ export const PULL = {
   throwSpeed: 32, // m/s for a ~30 kg object; lighter objects fly faster, heavier slower
   minThrowSpeed: 10,
   maxThrowSpeed: 45,
+};
+
+// Web tethers (SPEC §5.4), key F: web two things together
+export const TETHER = {
+  maxTethers: 10, // oldest removed first (they never break)
+  elasticity: 600, // pull per unit strain, per `forceMass` kg (stiffer than swing lines)
+  forceMass: 80,
+  dampingRatio: 0.5,
+  pendingTimeout: 20, // seconds an un-joined first end waits for the second
+  strandRadius: 0.15, // collider radius of a static↔static strand (you can stand on it)
+  fadeTime: 0.6, // removed tethers fade out
 };

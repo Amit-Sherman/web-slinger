@@ -56,7 +56,7 @@ function glowSprite(tex: THREE.Texture, screenSpace: boolean): THREE.Sprite {
 
 interface Particle { p: THREE.Vector3; v: THREE.Vector3 }
 
-interface Strip {
+export interface Strip {
   core: Line2;
   glow: Line2;
 }
@@ -89,7 +89,7 @@ interface Strand {
   age: number;
 }
 
-function makeStrip(scene: THREE.Scene): Strip {
+export function makeStrip(scene: THREE.Scene): Strip {
   const geo = new LineGeometry();
   geo.setPositions(new Float32Array(STRIP_CAPACITY * 3));
   geo.instanceCount = 0;
@@ -131,7 +131,7 @@ function writePoints(geo: LineGeometry, pts: THREE.Vector3[]): void {
   geo.instanceCount = Math.max(0, n - 1);
 }
 
-function setStrip(strip: Strip, pts: THREE.Vector3[], opacity: number, width: number, glow = 0.45): void {
+export function setStrip(strip: Strip, pts: THREE.Vector3[], opacity: number, width: number, glow = 0.45): void {
   writePoints(strip.core.geometry, pts);
   strip.core.visible = strip.glow.visible = true;
   strip.core.material.opacity = opacity;
@@ -140,7 +140,7 @@ function setStrip(strip: Strip, pts: THREE.Vector3[], opacity: number, width: nu
   strip.glow.material.linewidth = 7 * width;
 }
 
-function hideStrip(strip: Strip): void {
+export function hideStrip(strip: Strip): void {
   strip.core.visible = strip.glow.visible = false;
 }
 
@@ -185,7 +185,8 @@ export class LineVisuals {
         lastKind: 'idle', vibration: 0, lastTension: 0,
       };
     };
-    this.hands = [mk(), mk(), mk()]; // left, right, pull line (from the right launcher)
+    // left, right, pull line (right launcher), tether shot + your own tether (left launcher)
+    this.hands = [mk(), mk(), mk(), mk(), mk()];
   }
 
   setResolution(w: number, h: number): void {
@@ -230,7 +231,8 @@ export class LineVisuals {
         h.blendT = BLEND_TIME;
         h.vibration = 0.6;
       }
-      if (l.kind === 'idle' && h.points.length > 1) this.spawnStrand(h, h.lastKind === 'attached');
+      if (l.kind === 'idle' && h.points.length > 1 && !l.noStrand) this.spawnStrand(h, h.lastKind === 'attached');
+      l.noStrand = false;
       if (l.kind === 'idle') h.particles.length = 0;
       h.lastKind = l.kind;
     }

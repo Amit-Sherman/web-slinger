@@ -172,6 +172,10 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
     - you **hold Shift at ≥ 12 m/s** (a deliberate wall-run).
     Glancing contacts slide.
   - On the ground, walking into a wall while holding W still starts a climb.
+  - **Props:** walking into a light prop (< 200 kg) **pushes** it, with at most 600 N (a strong
+    person), instead of climbing it. Heavy props (cars, AC units) are climbable like walls, and
+    their friction (~10 kN for a car) means you can't push them. Measured: a trash can was pushed
+    ~2.9 m in 2 s; a car didn't move and the player climbed over it.
   - Head-on slams faster than 28 m/s with no line still **stagger** (unchanged).
   - Headless checks: swinging glancing → slides at 22 m/s; swinging head-on → slides; no line
     glancing → slides; head-on → grabs; 35 m/s head-on → stagger; glancing + W → grabs;
@@ -286,6 +290,32 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 - A taut or reeling pull line pulls you off walls, like swing lines.
 - Numbers: `PULL` and `PROPS` in `src/config/gameplay.ts`.
 
+### 5.4 Web tethers — [DECIDED, built] (key F)
+Web two things together. Once joined you **can't control the strand: it just holds**.
+- **F** → a web stream (left launcher, same ballistic stream as §5.1) flies to **end A**: anything
+  (prop, wall, pole, street, a splat). A slack strand then runs from your left hand to A, and the HUD
+  shows `TETHER · F: 2nd end · Shift+F: tie to you`.
+- **F again** → a second stream flies to **end B**; A and B are joined by one strand. While B flies,
+  A's strand stays drawn from your hand.
+- **Shift+F** (while A waits) → **ties A to yourself**. This acts like a swing line you can't reel or
+  release. HUD: `TIED · F to cut`. **F** cuts your own tether (so you can never be trapped).
+  Only one self-tether at a time.
+- An end A that waits 20 s without a second end drops (falling strand).
+- **Physics:** rest length = the distance between the ends at the moment they join ("just holds",
+  no contraction). Beyond that it's an elastic spring-damper: pull = 80 kg × (600 × strain) plus
+  damping (ζ 0.5), applied equal and opposite to prop ends (two-body; static ends don't move).
+  Stiffness is capped at 0.25·m_light/dt² for numerical stability with very light props.
+  Measured: a trash can tethered to a wall and kicked at ~27 m/s stopped at 25.2 m on a 24.3 m
+  tether (it would have flown ~50 m).
+- **Static ↔ static strands are solid:** a thin capsule collider (r 0.15 m) along the strand. You
+  can **stand and walk on it** (a tightrope between buildings) and anchor lines to it.
+- **Ends allowed:** prop ↔ static, prop ↔ prop, static ↔ static, you ↔ anything.
+- **Lifetime:** tethers never break; **max 10**, and the oldest is removed (fades out over 0.6 s,
+  its collider is removed).
+- Strands sag when slack and thin when stretched, like all lines. Sounds: fire, end stuck,
+  connect (a taut twang), cut.
+- Numbers: `TETHER` in `src/config/gameplay.ts`.
+
 ---
 
 ## 6. Controls — Keyboard + Mouse
@@ -302,7 +332,8 @@ acceleration through the browser on Linux, macOS and Windows with zero setup.
 | W A S D | Move / air-steer / crawl on walls | DECIDED |
 | Space | Jump / wall-jump / launch at end of zip | DECIDED |
 | Shift (alone) | Sprint on ground / wall-run | BUILT-DEFAULT |
-| F | Unbound (web-zip dropped) | DECIDED |
+| F | Tether: 1st end, then 2nd end (web two things together) · F while tied cuts your tether | DECIDED |
+| Shift + F | Tie the waiting 1st end to yourself | DECIDED |
 | Middle mouse (hold) | Pull line: catch & hold light objects, release to throw; yank yourself to heavy/fixed things | DECIDED |
 | R (hold) | Web balls (auto-fire, hands alternate) | DECIDED |
 | Ctrl **or C** | Crouch, drop off a wall | DECIDED (C alias built: browsers can't block Ctrl+W, which closes the tab) |
@@ -514,8 +545,13 @@ src/
   config/            # gameplay.ts (all tunables), settings.ts (presets, persistence)
 ```
 - **Physics model:** Rapier holds static colliders (cuboids, cylinders, balls, cones), the
-  dynamic props (world gravity 9.81) and the player: a **kinematic** body moved by a kinematic
-  character controller (slide, autostep 0.5 m, snap to ground, pushes props). Player gravity,
+  dynamic props (world gravity 9.81) and the player: a **standalone capsule collider** (no rigid
+  body) moved by a kinematic character controller (slide, autostep 0.5 m, snap to ground).
+  Prop pushing is our own force-limited code, not Rapier's.
+  - **Pitfall (bug found during M2):** the character controller loses precision against
+    *huge* cuboids. The single 2 km street slab made the player sink ~3–20 cm and **get stuck when
+    running on the street** (this was present since M1). All big boxes are therefore added as
+    **≤ 100 m collider tiles** (`Physics.addCuboidTiled`); the visual mesh stays one piece. Player gravity,
   ropes and movement modes are our own code. Per 60 Hz tick: player tick (lines, pull line,
   movement, rope forces incl. reactions on props) → web balls → prop glue timers →
   `world.step()` → game mode. Ray hits report the prop body they hit (`RayHit.body`).
@@ -612,3 +648,7 @@ headless physics and screenshot checks. It still needs a human playtest against 
 | 2026-11-22 | M2: web balls knock + glue + splat decals + splat anchors | User choice (all four) |
 | 2026-11-22 | Pull line: two-body physics, catch ≤250 kg, release to throw | Heavy things pull you, by real physics |
 | 2026-11-22 | Walls only grab on deliberate contact; mid-swing hits scrape along | Bug: accidental hits mid-swing stopped you as if climbing |
+| 2026-11-22 | Web tethers on F: two shots join ends; just holds; never break, max 10; Shift+F ties to you | User request ("connect objects with a web") |
+| 2026-11-22 | Static↔static tether strands are solid (tightrope, anchor) | Makes building-to-building webs useful |
+| 2026-11-22 | Ground colliders tiled ≤100 m | Bug: player sank/stuck when running on the street (since M1) |
+| 2026-11-22 | Light props pushed (≤600 N), heavy props climbable | Walking into a trash can used to climb it |

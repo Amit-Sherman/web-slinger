@@ -36,6 +36,22 @@ export class Physics {
     this.world.createCollider(this.R.ColliderDesc.cuboid(hx, hy, hz).setTranslation(x, y, z));
   }
 
+  /**
+   * Like addCuboid, but huge boxes are split into tiles (≤ `tile` m wide). The character
+   * controller loses precision against very large cuboids (the 2 km street slab made the player
+   * sink a few cm and get stuck when running), so the ground is built from tiles.
+   */
+  addCuboidTiled(x: number, y: number, z: number, hx: number, hy: number, hz: number, tile = 100): void {
+    const nx = Math.max(1, Math.ceil((hx * 2) / tile));
+    const nz = Math.max(1, Math.ceil((hz * 2) / tile));
+    const tx = hx / nx, tz = hz / nz;
+    for (let i = 0; i < nx; i++) {
+      for (let j = 0; j < nz; j++) {
+        this.addCuboid(x - hx + tx * (2 * i + 1), y, z - hz + tz * (2 * j + 1), tx, hy, tz);
+      }
+    }
+  }
+
   addCylinder(x: number, y: number, z: number, radius: number, halfHeight: number): void {
     this.world.createCollider(this.R.ColliderDesc.cylinder(halfHeight, radius).setTranslation(x, y, z));
   }

@@ -41,7 +41,7 @@ export function buildCity(city: CityData, scene: THREE.Scene, physics: Physics, 
   scene.add(structures);
 
   for (const b of [...city.buildings, ...city.slabs, ...city.structures]) {
-    if (b.collide) physics.addCuboid(b.x, b.y, b.z, b.hx, b.hy, b.hz);
+    if (b.collide) physics.addCuboidTiled(b.x, b.y, b.z, b.hx, b.hy, b.hz);
   }
 
   // Cylinders: lamp posts, trunks, water tanks, antennas

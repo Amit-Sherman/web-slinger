@@ -15,6 +15,7 @@ import { Sky } from '../render/sky';
 import { Hud } from '../ui/hud';
 import type { Menu } from '../ui/menu';
 import { launchVelocity, predictImpact, setMagnetQuery } from '../webs/ballistics';
+import { Tethers } from '../webs/tethers';
 import { WebBalls } from '../webs/webBalls';
 import { Props } from '../world/props';
 import { LineVisuals } from '../webs/lineVisuals';
@@ -32,6 +33,7 @@ export class Game {
   private player: PlayerController;
   private props: Props;
   private webBalls: WebBalls;
+  private tethers: Tethers;
   private arms: Arms;
   private lineVisuals: LineVisuals;
   private hud = new Hud();
@@ -68,6 +70,7 @@ export class Game {
     this.player = new PlayerController(physics, city, newPlayerState(city.spawn.x, city.spawn.y, city.spawn.z));
     this.player.props = this.props;
     this.webBalls = new WebBalls(this.scene, physics, this.props);
+    this.tethers = new Tethers(this.scene, physics, this.props);
     setMagnetQuery(this.webBalls.magnet); // web-ball splats act as anchors for streams
     physics.finalize();
     this.props.sleepAll();
@@ -179,6 +182,7 @@ export class Game {
     this.cam.camera.aspect = w / h;
     this.cam.camera.updateProjectionMatrix();
     this.lineVisuals.setResolution(w, h);
+    this.tethers?.setResolution(w, h);
   }
 
   private frame(now: number): void {
@@ -196,6 +200,7 @@ export class Game {
         const snap = this.input.snapshot();
         this.player.tick(snap, this.cam.aim, this.cam.yaw, TICK);
         this.webBalls.tick(snap, this.player.eyePosition(this.eye), this.cam.aim, s.vel, this.player.collider, s.events, TICK);
+        this.tethers.tick(s, snap, this.eye, this.cam.aim, this.player.collider, TICK);
         this.props.tick(TICK);
         this.physics.step();
         this.mode.tick(this.ctx, TICK);
@@ -217,17 +222,23 @@ export class Game {
     this.cam.update(this.eye, s.vel, this.playing ? dt : 0, this.settings);
     this.props.sync();
     this.webBalls.render(this.playing ? dt : 0);
-    this.arms.update(s.lines, s.pull, speed, s.mode === 'ground', dt);
+    this.arms.update(s.lines, s.pull, this.tethers.shot.kind !== 'idle' ? this.tethers.shot : this.tethers.self, speed, s.mode === 'ground', dt);
     this.arms.wristWorld(0, this.wrists[0]);
     this.arms.wristWorld(1, this.wrists[1]);
-    this.lineVisuals.update([s.lines[0], s.lines[1], s.pull], [this.wrists[0], this.wrists[1], this.wrists[1]], this.renderPos, this.cam.aim, s.vel, this.playing ? dt : 0);
+    const tetherShot = this.tethers.shot;
+    this.lineVisuals.update(
+      [s.lines[0], s.lines[1], s.pull, tetherShot, this.tethers.self],
+      [this.wrists[0], this.wrists[1], this.wrists[1], this.wrists[0], this.wrists[0]],
+      this.renderPos, this.cam.aim, s.vel, this.playing ? dt : 0,
+    );
+    this.tethers.render(this.wrists[0], this.playing ? dt : 0);
     this.sky.update(this.cam.camera.position, this.renderPos, this.cam.camera.far);
     this.sfx.update(this.playing ? speed : 0, s.lines);
 
     if (this.playing) {
       // Where would a stream fired right now land? (ballistic drop + inherited velocity)
       const impact = predictImpact(this.eye, launchVelocity(this.launchVel, this.cam.aim, s.vel), this.physics, this.player.collider);
-      this.hud.update(impact, this.cam.camera, s.lines, [s.pos.distanceTo(s.lines[0].target), s.pos.distanceTo(s.lines[1].target)], speed, s.pos.y, s.pull);
+      this.hud.update(impact, this.cam.camera, s.lines, [s.pos.distanceTo(s.lines[0].target), s.pos.distanceTo(s.lines[1].target)], speed, s.pos.y, s.pull, this.tethers.status);
     }
 
     const speedLines = this.settings.motionEffects ? THREE.MathUtils.clamp((speed - 30) / 35, 0, 1) : 0;
@@ -243,6 +254,9 @@ export class Game {
         break;
       case 'pullFire':
         this.arms.fired(1);
+        break;
+      case 'tetherFire':
+        this.arms.fired(0);
         break;
       case 'land':
         if (e.impact > LANDING.heavyImpactSpeed) {

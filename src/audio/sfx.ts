@@ -192,6 +192,19 @@ export class Sfx {
       case 'wallScrape': // gritty brush against the facade
         this.burst({ dur: 0.14, gain: Math.min(0.22, 0.05 + e.speed / 200), type: 'bandpass', f0: 900, f1: 500, q: 0.8 });
         break;
+      case 'tetherFire':
+        this.burst({ dur: 0.14, gain: 0.45, type: 'bandpass', f0: 1600, f1: 6000, q: 2, pan: -0.6 });
+        break;
+      case 'tetherEnd':
+        this.tone({ dur: 0.07, gain: 0.22, type: 'square', f0: 1200, f1: 500, pan: -0.5 });
+        break;
+      case 'tetherConnect': // taut twang
+        this.tone({ dur: 0.25, gain: 0.25, type: 'triangle', f0: 520, f1: 380 });
+        this.tone({ dur: 0.2, gain: 0.12, type: 'sine', f0: 1040, f1: 760 });
+        break;
+      case 'tetherCut':
+        this.tone({ dur: 0.08, gain: 0.2, type: 'triangle', f0: 1500, f1: 2400 });
+        break;
       case 'splash':
         this.burst({ dur: 0.6, gain: 0.4, type: 'lowpass', f0: 3000, f1: 200 });
         break;

@@ -22,6 +22,8 @@ export interface LineState {
   anchorLocal: THREE.Vector3;
   /** Pull line only: a light object has been caught and is held in front of you. */
   holding: boolean;
+  /** Visual hint: when this line goes idle, don't leave a lingering strand (it became a tether). */
+  noStrand?: boolean;
   /** Constraint correction speed last tick (m/s), drives the taut "twang" visual. */
   tension: number;
   /** -1 letting out, 0 none, 1 reeling in. */
@@ -46,7 +48,11 @@ export type GameEvent =
   | { type: 'pullAttach' }
   | { type: 'catch' }
   | { type: 'throw' }
-  | { type: 'pullRelease' };
+  | { type: 'pullRelease' }
+  | { type: 'tetherFire' }
+  | { type: 'tetherEnd' }
+  | { type: 'tetherConnect' }
+  | { type: 'tetherCut' };
 
 export interface PlayerState {
   pos: THREE.Vector3;
@@ -66,7 +72,7 @@ export interface PlayerState {
   events: GameEvent[];
 }
 
-function newLine(): LineState {
+export function newLine(): LineState {
   return {
     kind: 'idle', target: new THREE.Vector3(), tipVel: new THREE.Vector3(), flightTime: 0,
     length: 0, tension: 0, reel: 0, anchorBody: -1, anchorLocal: new THREE.Vector3(), holding: false,
